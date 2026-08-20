@@ -1,0 +1,2452 @@
+// GROW 420 — common.js — Variabili globali e utility condivise
+
+// ── 1. DEXIE / INDEXEDDB ──────────────────────────────────
+let db = null;
+try {
+    db = new Dexie('Grow420DB');
+    db.version(1).stores({
+        plants: '++id, name, strain, type, phase, day, startDate, updatedAt',
+        logs: '++id, plantId, date, text, tags, *photos, [plantId+date]',
+        photos: '++id, plantId, logId, data, createdAt',
+        reminders: '++id, title, datetime, repeat, active, createdAt',
+        settings: 'key'
+    });
+    // FASE 2 — v2: aggiunge indice isProblem ai logs (upgrade non distruttivo per chi ha già dati)
+    db.version(2).stores({
+        logs: '++id, plantId, date, text, tags, isProblem, *photos, [plantId+date]'
+    });
+} catch(e) {
+    console.warn('Dexie non caricato, alcune funzioni offline non saranno disponibili');
+}
+
+// ── 2. SUPABASE (standby) ─────────────────────────────────
+const SUPABASE_URL = 'https://khrawcayqduqufiirntm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtocmF3Y2F5cWR1cXVmaWlybnRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMTE2MTksImV4cCI6MjEwMTg4NzYxOX0.HdoKw24zO4_rEPhSMSTKshtU3fSS8ykqZvJ5QIRPrng';
+let supabaseClient = null;
+if (typeof supabase !== 'undefined' && SUPABASE_URL && SUPABASE_KEY) {
+    try { supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
+    catch(e) { console.warn('Supabase non configurato'); }
+}
+
+// ── 3. PWA MANIFEST (file separato: manifest.json)
+
+// ── 4. SERVICE WORKER (file separato: sw.js) ──────────────
+if('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')){
+    navigator.serviceWorker.register('./sw.js')
+        .then(r => console.log('[GROW420] SW registrato'))
+        .catch(e => console.warn('[GROW420] SW errore',e));
+} else if (location.protocol === 'file:') {
+    console.info('[GROW420] Service Worker disattivato su file:// — usa un server locale per la PWA.');
+}
+// ── 5. OFFLINE BADGE ──────────────────────────────────────
+function updateOnlineStatus(){const b=document.getElementById('offlineBadge');if(b)b.classList.toggle('show',!navigator.onLine)}
+window.addEventListener('online',updateOnlineStatus);window.addEventListener('offline',updateOnlineStatus);setTimeout(updateOnlineStatus,500);
+
+// ── 6. GLOSSARY DB ────────────────────────────────────────
+const glossaryDB={"LST":"Low Stress Training — piegatura dolce dei rami per aumentare l'esposizione alla luce senza ferire la pianta.","flush":"Lavaggio del substrato con acqua pulita (pH corretto) per eliminare sali in eccesso prima della raccolta.","tricomi":"Ghiandole resinose su fiori e foglie che producono cannabinoidi, terpeni e flavonoidi.","topping":"Tecnica di potatura apicale per dividere la crescita dominante in 2+ rami principali.","defoliazione":"Rimozione selettiva di foglie per migliorare l'aerazione e l'esposizione luminosa.","cotiledoni":"Prime foglie tonde che emergono dal seme, contengono nutrienti iniziali per la piantina.","internodi":"Distanza tra due nodi (punti di crescita) sullo stelo. Corti = luce intensa.","auxina":"Ormone vegetale che regola l'apical dominance. Distribuirla uniformemente = più cime.","chemotype":"Profilo chimico della pianta (rapporto THC:CBD e terpeni dominanti), indipendente dalla genetica Indica/Sativa.","COA":"Certificate of Analysis — certificato di analisi di laboratorio che attesta THC, CBD, terpeni e assenza di contaminanti.","Boveda":"Pack umidificante a due vie che mantiene l'umidità costante (es. 62%) nei barattoli di curing.","VPD":"Vapor Pressure Deficit — differenza tra umidità attuale e saturazione. Ottimale 0.8-1.2 kPa in veg, 1.2-1.6 in bloom.","PAR":"Photosynthetically Active Radiation — radiazione 400-700nm usata dalla pianta per la fotosintesi.","DLI":"Daily Light Integral — quantità totale di luce (mol/m²/die). Target: 20-40 in veg, 40-65 in bloom.","nutrient burn":"Bruciatura da eccesso di fertilizzante. Si manifesta con punte marroni e ricurve delle foglie.","overwatering":"Eccesso di acqua che soffoca le radici. Sintomo: foglie arricciate verso il basso, crescita bloccata.","underwatering":"Mancanza d'acqua. Foglie flaccide e appassite che non recuperano al tocco.","Bud Rot":"Muffa grigia (Botrytis) che attacca i fiori in condizioni di alta umidità. Irreversibile.","Powdery Mildew":"Oidio bianco polveroso sulle foglie. Trattabile con bicarbonato o olio di neem.","Ragnetto Rosso":"Acaro microscopico che causa puntini gialli e ragnatele sotto le foglie.","Fungus Gnat":"Moscerino del terriccio. Larve mangiano radici giovani. Controllare con siccità e sabbia.","Afidi":"Insetti verdi che succhiano linfa e secernono melata. Trattabili con olio di neem.","lollipopping":"Rimozione di rami e foglie nella parte bassa della pianta per concentrare l'energia sulle cime superiori.","ScrOG":"Screen of Green — tecnica con rete orizzontale per uniformare l'altezza delle cime.","mainline":"Tecnica di training che crea 8-16 cime principali di uguale altezza partendo da un manifold.","manifold":"Struttura a Y creata con topping mirati per distribuire uniformemente la linfa.","terpeni":"Composti aromatici che determinano sapore, odore e modulano l'effetto dei cannabinoidi (entourage effect).","cannabinoidi":"Composti attivi della cannabis: THC, CBD, CBG, CBN e altri 100+ molecole.","THC":"Tetraidrocannabinolo — principale cannabinoide psicoattivo.","CBD":"Cannabidiolo — cannabinoide non psicoattivo con effetti rilassanti e antinfiammatori.","CBN":"Cannabinolo — derivato dalla degradazione del THC, effetto sedativo.","CBG":"Cannabigerolo — precursore di THC e CBD, con proprietà antibatteriche.","myrcene":"Terpeno con aroma terroso e mango. Effetto sedativo e potenziatore del THC.","limonene":"Terpeno citrico. Effetto energizzante, antidepressivo e antifungino.","pinene":"Terpeno con aroma di pino. Migliora la concentrazione e la memoria.","linalool":"Terpeno floreale (lavanda). Effetto antiansia e sedativo.","caryophyllene":"Terpeno piccante. Unico ad interagire con i recettori CB2 (come un cannabinoide).","curing":"Processo di stagionatura in barattolo che migliora sapore, effetto e conservazione.","essiccazione":"Fase di asciugatura dei fiori prima del curing. Deve essere lenta (10-14 giorni).","wet trim":"Potatura dei fiori freschi, subito dopo la raccolta.","dry trim":"Potatura dei fiori dopo l'essiccazione, prima del curing.","sugar leaves":"Foglie piccole che spuntano dai fiori, ricche di tricomi. Usate per hash edibles.","fan leaves":"Foglie grandi e palmate. Poche tricomi, usate per infusi o compost.","pistilli":"Pelini bianchi/rossi che emergono dai calici. Indicano sesso femminile e maturazione.","calici":"Strutture che racchiudono gli ovuli. Si gonfiano formando le cime.","bract":"Foglia modificata che racchiude il fiore. Parte più resinosa della pianta.","apical dominance":"Dominanza della punta di crescita. L'auxina inibisce i rami laterali. Il LST la supera.","fotoperiodo":"Pianta che fiorisce in base al rapporto luce/buio (12/12).","autofiorente":"Pianta che fiorisce automaticamente dopo 2-4 settimane, indipendentemente dalla luce.","ruderalis":"Sottospecie di cannabis originaria della Siberia. Genetica base delle autofiorenti.","indica":"Sottospecie bassa e compatta, effetto rilassante. Origine montagne asiatiche.","sativa":"Sottospecie alta e slanciata, effetto energizzante. Origine zone equatoriali.","hybrid":"Incrocio tra Indica e Sativa per combinare i tratti migliori.","genetica":"Patrimonio ereditario della pianta. Determina struttura, resa, aroma e effetto.","fenotipo":"Espressione fisica osservabile di una genetica (colore, struttura, aroma).","chemovar":"Classificazione basata sul profilo chimico (cannabinoidi + terpeni) invece che sulla morfologia.","substrato":"Materiale in cui crescono le radici (terra, cocco, rockwool, idroponico).","perlite":"Materiale vulcanico espanso che migliora drenaggio e aerazione del substrato.","vermiculite":"Minerale espanso che trattiene acqua e nutrienti. Utile in miscela con perlite.","pH":"Scala di acidità. Per cannabis in terra: 6.0-6.5. In idroponica: 5.5-6.0.","EC":"Electrical Conductivity — misura la concentrazione di sali nutritivi nell'acqua (mS/cm).","PPM":"Parts Per Million — alternativa all'EC per misurare la concentrazione di nutrienti.","NPK":"Rapporto Azoto-Fosforo-Potassio nei fertilizzanti. Grow = alto N, Bloom = alto P e K.","CalMag":"Integratore di Calcio e Magnesio. Essenziale in acqua demineralizzata o RO.","root rot":"Marciume radicale causato da anaerobiosi (troppa acqua). Odore di uovo marcio.","drenaggio":"Capacità del substrato di far defluire l'acqua in eccesso. Fondamentale per radici sane.","aerazione":"Circolazione d'aria nel substrato. Radici hanno bisogno di ossigeno.","transpirazione":"Processo di evaporazione dell'acqua dalle foglie. Regola temperatura e assorbimento.","stomata":"Porzi epidermici sulle foglie che regolano scambio gas e transpirazione.","clorofilla":"Pigmento verde responsabile della fotosintesi. Si degrada durante il curing.","carotenoidi":"Pigmenti gialli/arancioni che emergono quando la clorofilla si degrada (autunno).","antocianine":"Pigmenti viola/rossi prodotti in risposta a stress termico (freddo notturno).","UV-B":"Ultravioletto B. Stress positivo che stimola la produzione di tricomi (difesa della pianta).","IR":"Infrarosso. Calore emesso dalle lampade. Gestire con ventilazione.","PPFD":"Photosynthetic Photon Flux Density — intensità luminosa utile (μmol/m²/s).","umidità relativa":"Percentuale di vapore acqueo nell'aria rispetto alla saturazione. Target: 50-65% veg, 40-50% bloom.","deumidificatore":"Apparecchio che rimuove umidità dall'aria. Essenziale in fioritura.","umidificatore":"Apparecchio che aggiunge umidità. Utile in germinazione e seedling.","carbon filter":"Filtro a carboni attivi che elimina gli odori dall'aria estratta.","inline fan":"Ventilatore in linea per estrazione aria calda e umida dal grow tent.","oscillating fan":"Ventilatore oscillante per creare brezza sulle piante (wind stress positivo).","timer":"Temporizzatore per gestire i cicli di luce (18/6 in veg, 12/12 in bloom).","thermohygrometer":"Strumento che misura temperatura e umidità. Indispensabile in ogni grow.","lux meter":"Misuratore di luce visibile. Approssimativo per LED (meglio PAR/PPFD meter).","pH meter":"Misuratore digitale dell'acidità. Va calibrato regolarmente.","TDS meter":"Misuratore di solidi disciolti. Utile per controllare EC/PPM dell'acqua.","lente":"Lente di ingrandimento 30-60x per osservare i tricomi e determinare la maturazione.","microscopio USB":"Microscopio digitale per foto dettagliate dei tricomi.","dry room":"Stanza dedicata all'essiccazione. Buio, 15-20°C, 45-55% umidità.","grow tent":"Tenda riflettente per creare un ambiente di coltivazione controllato.","LED":"Light Emitting Diode — tecnologia di illuminazione efficiente e a spettro completo.","HPS":"High Pressure Sodium — lampada ad alogenuri metallici, calda e intensa.","CMH":"Ceramic Metal Halide — lampada ceramica con spettro bilanciato.","ballast":"Alimentatore per lampade HPS/CMH. Può essere magnetico o digitale (dimmerabile).","reflector":"Riflettore che indirizza la luce verso le piante. Riduce perdite.","dimmer":"Dispositivo per regolare l'intensità luminosa. Utile in seedling.","CO2 enrichment":"Aggiunta di anidride carbonica per aumentare la fotosintesi (1500ppm target).","sealed room":"Grow room sigillata con supplemento CO2 e climatizzazione attiva.","IPM":"Integrated Pest Management — gestione integrata dei parassiti (prevenzione + trattamento).","neem oil":"Olio di neem — insetticida naturale contro afidi, ragnetti e funghi.","potassium bicarbonate":"Bicarbonato di potassio — fungicida contro oidio e muffe.","beneficial insects":"Insetti utili (es. ladybugs) che mangiano parassiti senza chimica.","companion planting":"Piantumazione associata (es. basilico) per respingere parassiti.","pruning":"Potatura generica per rimuovere parti non necessarie alla pianta.","fimming":"Tecnica simile al topping ma meno precisa (FIM = Fuck I Missed).","supercropping":"Piegatura aggressiva del ramo fino a quasi spezzarlo per stimolare la crescita.","monster cropping":"Tecnica di clonazione da pianta in fioritura per ottenere struttura bush-like.","cloning":"Riproduzione asessuata per talea. Mantiene identica la genetica madre.","mother plant":"Pianta madre mantenuta in vegetativa per produrre cloni.","talea":"Frammento di ramo radicato per clonazione. Richiede umidità alta e luce tenue.","rooting hormone":"Ormone radicante (IBA) che accelera l'emissione di radici nelle talee.","dome":"Cupola di plastica per mantenere umidità alta su talee o seedling.","heat mat":"Tappetino riscaldante per mantenere 22-26°C in germinazione e rooting.","propagation":"Fase di propagazione: germinazione, seedling e rooting di talee.","veg":"Abbreviazione di Vegetativa — fase di crescita strutturale.","bloom":"Abbreviazione di Fioritura — fase riproduttiva.","stretch":"Allungamento rapido dei rami nelle prime 2-3 settimane di bloom.","swelling":"Fase di ingrossamento delle cime (settimane 4-6 di bloom).","ripening":"Fase finale di maturazione dove i tricomi cambiano colore.","senescenza":"Invecchiamento naturale della pianta. Foglie gialle e degradazione.","hermaphroditism":"Ermafroditismo — comparsa di fiori maschili su pianta femmina per stress.","bananas":"Strutture maschili (nanners) che emergono dai fiori femminili. Pericolo polline.","seeds":"Semi. Formati quando una femmina viene impollinata da un maschio o hermie.","feminized":"Semi femminizzati — ottenuti forzando una femmina a produrre polline (colloidal silver).","regular":"Semi regolari — 50% maschi, 50% femmine. Necessari per breeding.","auto":"Abbreviazione di autofiorente.","foto":"Abbreviazione di fotoperiodo.","pheno hunt":"Ricerca del fenotipo migliore tra semi della stessa genetica.","keeper":"Fenotipo eccezionale che si decide di conservare/clonare.","breeding":"Incrocio controllato tra genitori per creare nuove varietà.","backcross":"Incrocio di un ibrido con uno dei genitori per stabilizzare tratti.","IBL":"Inbred Line — linea consanguinea, genetica altamente stabilizzata.","F1":"Prima generazione di incrocio tra due linee pure. Ibrido vigoroso.","F2":"Seconda generazione. Maggiore variabilità fenotipica.","landrace":"Varietà autoctona, adattata a un ambiente specifico per generazioni.","heirloom":"Varietà tradizionale non ibridata, preservata nel tempo.","entourage effect":"Effetto entourage — sinergia tra cannabinoidi e terpeni che modula l'effetto complessivo.","bioavailability":"Biodisponibilità — percentuale di sostanza attiva che raggiunge la circolazione.","decarboxylation":"Decarbossilazione — riscaldamento che trasforma THCA in THC attivo.","rosin":"Concentrato ottenuto per pressione termica senza solventi.","BHO":"Butane Hash Oil — concentrato ottenuto con solvente butano.","hash":"Resina compressa ottenuta separando i tricomi dalla materia vegetale.","kief":"Polvere di tricomi raccolta dal grinder. Base per hash edibles.","edibles":"Prodotti commestibili a base di cannabis (brownies, gummy, oli).","tincture":"Tintura — estratto alcolico o glicerico per uso sublinguale.","topical":"Prodotto per uso cutaneo (creme, balsami) con effetto locale.","sublingual":"Assorbimento sotto la lingua. Effetto in 15-30 minuti.","inhalation":"Inalazione — effetto in 2-5 minuti, durata 1-3 ore.","oral":"Via orale — effetto in 30-90 minuti, durata 4-8 ore.","tolerance":"Tolleranza — necessità di dosi crescenti per ottenere lo stesso effetto.","t-break":"Tolerance break — pausa volontaria per resettare la tolleranza.","strain":"Varietà / cultivar — una specifica genetica di cannabis.","cultivar":"Cultivar — cultivar (cultivated variety). Termine botanico più corretto di 'strain'.","genotype":"Genotipo — sequenza genetica ereditata, non osservabile direttamente.","soma":"Tutto il corpo della pianta esclusi i gameti (cellule diploidi).","meristem":"Tessuto meristematico — zone di divisione cellulare attiva (apici, gemme).","xylem":"Vasi del legno — trasportano acqua e minerali dalle radici alle foglie.","phloem":"Liber — trasporta zuccheri dalle foglie al resto della pianta.","cambium":"Strato di cellule tra xilema e floema che produce nuovi vasi.","callus":"Callo — tessuto di cicatrizzazione che si forma su ferite da potatura.","hormone":"Ormone vegetale — sostanza che regola crescita e sviluppo (auxina, citochinina, giberellina).","cytokinin":"Citochinina — ormone che stimola la divisione cellulare e la germinazione.","gibberellin":"Giberellina — ormone che regola allungamento dello stelo e fioritura.","ethylene":"Etilene — ormone gassoso che regola maturazione e senescenza.","abscisic acid":"Acido abscissico — ormone dello stress che induce dormienza e chiusura stomi.","photoperiodism":"Fotoperiodismo — risposta biologica alla durata del giorno (12h buio = fioritura).","circadian rhythm":"Ritmo circadiano — ciclo biologico di 24h che regola processi cellulari.","phototropism":"Fototropismo — crescita verso la luce.","gravitropism":"Gravitropismo — crescita in risposta alla gravità (radici giù, stelo su).","thigmotropism":"Tigmotropismo — risposta al tocco (piante che si attorcigliano).","hydrotropism":"Idrotropismo — crescita delle radici verso l'acqua.","Mycorrhizae":"Micorrize — simbiosi funghi-radici che aumentano l'assorbimento di acqua e nutrienti.","rhizosphere":"Rizosfera — zona intorno alle radici ricca di microrganismi benefici.","beneficial bacteria":"Batteri benefici (es. Bacillus subtilis) che proteggono dalle malattie.","trichoderma":"Fungo benefico che colonizza il substrato e combatte patogeni.","compost tea":"Compost tea — estratto aerato di compost usato come fertilizzante biologico.","worm casting":"Letame di lombrico — fertilizzante organico ricco di microrganismi.","bat guano":"Guano di pipistrello — fertilizzante naturale ricco di N, P e K.","fish emulsion":"Emulsione di pesce — fertilizzante organico ad azione rapida.","kelp":"Alga kelp — fonte naturale di citochinine e micronutrienti.","molasses":"Melassa — fonte di carboidrati per i microrganismi del suolo.","silica":"Silice — rinforza le pareti cellulari, aumenta resistenza a parassiti e caldo.","humic acid":"Acido umico — migliora la cessione di nutrienti e la struttura del suolo.","fulvic acid":"Acido fulvico — trasporta nutrienti nelle cellule vegetali.","chelated":"Chelato — nutriente legato a una molecola organica per migliorarne l'assorbimento.","macronutrients":"Macronutrienti — N, P, K (azoto, fosforo, potassio).","micronutrients":"Micronutrienti — Fe, Mn, Zn, Cu, B, Mo, Cl (ferro, manganese, zinco, rame, boro, molibdeno, cloro).","mobile nutrients":"Nutrienti mobili — si spostano nella pianta. Carenza visibile sulle foglie vecchie (N, P, K, Mg).","immobile nutrients":"Nutrienti immobili — restano dove arrivano. Carenza sulle foglie nuove (Ca, Fe, S, Mn).","nitrogen":"Azoto (N) — macronutriente per la crescita vegetativa e la clorofilla.","phosphorus":"Fosforo (P) — essenziale per il trasferimento di energia, fioritura e radici.","potassium":"Potassio (K) — regola l'acqua, la fotosintesi e la resistenza alle malattie.","magnesium":"Magnesio (Mg) — centro atomico della clorofilla. Carenza = foglie gialle tra le vene.","calcium":"Calcio (Ca) — struttura delle pareti cellulari. Carenza = punta delle foglie brune e ricurve.","iron":"Ferro (Fe) — sintesi della clorofilla. Carenza = foglie giovani gialle con vene verdi.","sulfur":"Zolfo (S) — componente di aminoacidi e proteine. Carenza = foglie giovali gialle uniformi.","zinc":"Zinco (Zn) — sintesi di auxina e enzimi. Carenza = foglie piccole e accartocciate.","manganese":"Manganese (Mn) — fotosintesi e respirazione. Carenza = macchie marroni tra le vene.","boron":"Boro (B) — divisione cellulare e trasporto di zuccheri. Carenza = stelo fragile, aborto meristematico.","copper":"Rame (Cu) — respirazione e lignificazione. Carenza = foglie bluastre e arricciate.","molybdenum":"Molibdeno (Mo) — fissazione dell'azoto. Raro in terra, comune in idroponica.","chlorine":"Cloro — fotosintesi osmotica. Raramente carente.","nickel":"Nichel — attivazione di alcuni enzimi. Micronutriente rarissimo.","silicon":"Silicio — rinforzo meccanico e resistenza agli stress abiotici.","cobalt":"Cobalto — necessario per la fissazione simbiotica dell'azoto (leguminose)."};
+
+let glossaryTermsCache = null;
+function parseGlossary(html) {
+    if (!html) return html;
+    if(!glossaryTermsCache){
+        glossaryTermsCache = Object.keys(glossaryDB)
+            .sort((a,b)=>b.length-a.length);
+    }
+    const terms = glossaryTermsCache;
+    let result = html;
+    terms.forEach(term => {
+        const regex = new RegExp(`(?<![\w#])(${term})(?![\w])`, 'gi');
+        result = result.replace(regex, (match) => {
+            const def = glossaryDB[term] || glossaryDB[term.toLowerCase()];
+            if (!def) return match;
+            return `<span class="glossary-term">${match}<span class="glossary-tooltip">${def}</span></span>`;
+        });
+    });
+    return result;
+}
+
+// ── 7. REMINDER SYSTEM ────────────────────────────────────
+let reminderInterval = null;
+
+async function initReminders() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        // aspetta interazione utente
+    }
+    if (reminderInterval) clearInterval(reminderInterval);
+    reminderInterval = setInterval(checkReminders, 30000);
+    checkReminders();
+}
+
+async function checkReminders() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    const now = new Date();
+    const reminders = await db.reminders.where('active').equals(1).toArray();
+    reminders.forEach(async r => {
+        const dt = new Date(r.datetime);
+        if (dt <= now) {
+            try {
+                new Notification('GROW 420 — Promemoria', {
+                    body: r.title,
+                    tag: 'grow-reminder-' + r.id,
+                    requireInteraction: true
+                });
+            } catch(e) {
+                if (navigator.serviceWorker?.ready) {
+                    navigator.serviceWorker.ready.then(reg => {
+                        reg.showNotification('GROW 420 — Promemoria', { body: r.title, tag: 'grow-reminder-' + r.id });
+                    });
+                }
+            }
+            if (r.repeat && r.repeat !== 'once') {
+                const next = new Date(dt);
+                if (r.repeat === 'daily') next.setDate(next.getDate() + 1);
+                if (r.repeat === 'weekly') next.setDate(next.getDate() + 7);
+                await db.reminders.update(r.id, { datetime: next.toISOString() });
+            } else {
+                await db.reminders.update(r.id, { active: 0 });
+            }
+        }
+    });
+}
+
+async function addReminder(title, datetime, repeat) {
+    if ('Notification' in window && Notification.permission !== 'granted') {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') { alert('Abilita le notifiche per ricevere i promemoria.'); return false; }
+    }
+    await db.reminders.add({ title, datetime, repeat: repeat || 'once', active: 1, createdAt: new Date().toISOString() });
+    return true;
+}
+
+async function deleteReminder(id) { await db.reminders.delete(id); }
+async function toggleReminder(id, active) { await db.reminders.update(id, { active: active ? 1 : 0 }); }
+
+// ── 8. PHOTO SYSTEM (IndexedDB) ───────────────────────────
+async function addPhoto(plantId, file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = async () => {
+                try {
+                    const MAX_SIZE = 1600;
+                    const scale = Math.min(
+                        1,
+                        MAX_SIZE / Math.max(
+                            img.naturalWidth,
+                            img.naturalHeight
+                        )
+                    );
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(
+                        1,
+                        Math.round(img.naturalWidth * scale)
+                    );
+                    canvas.height = Math.max(
+                        1,
+                        Math.round(img.naturalHeight * scale)
+                    );
+                    const ctx = canvas.getContext(
+                        '2d',
+                        { alpha:false }
+                    );
+                    ctx.drawImage(
+                        img,
+                        0,
+                        0,
+                        canvas.width,
+                        canvas.height
+                    );
+                    const data = canvas.toDataURL(
+                        'image/jpeg',
+                        0.82
+                    );
+                    const id = await db.photos.add({
+                        plantId,
+                        logId: null,
+                        data,
+                        createdAt: new Date().toISOString()
+                    });
+                    resolve(id);
+                } catch(err) {
+                    reject(err);
+                }
+            };
+            img.onerror = () => {
+                reject(new Error('Immagine non valida'));
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+async function getPlantPhotos(plantId, limit = 50) {
+    return await db.photos.where('plantId').equals(plantId).reverse().limit(limit).toArray();
+}
+async function deletePhoto(id) { await db.photos.delete(id); }
+
+// ── 9. EXPORT / IMPORT ────────────────────────────────────
+async function exportAllData() {
+    const data = { version: 1, exportedAt: new Date().toISOString(), localStorage: {}, indexedDB: {} };
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); data.localStorage[k] = localStorage.getItem(k); }
+    data.indexedDB.plants = await db.plants.toArray();
+    data.indexedDB.logs = await db.logs.toArray();
+    data.indexedDB.photos = await db.photos.toArray();
+    data.indexedDB.reminders = await db.reminders.toArray();
+    data.indexedDB.settings = await db.settings.toArray();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `grow420-backup-${new Date().toISOString().slice(0,10)}.json`; a.click(); URL.revokeObjectURL(url);
+}
+
+async function exportCSV() {
+    const logs = await db.logs.toArray();
+    if (!logs.length) { alert('Nessun log da esportare'); return; }
+    const header = 'Data,PiantaID,Testo,Tag,pH,EC,Temp,Umidita,PesoFresco_g,PesoSecco_g,Resa_pct\n';
+    const rows = logs.map(l => {
+        const tags = (l.tags || []).join(';');
+        const m = l.metrics || {};
+        const fresh = m.fresh || '';
+        const dry = m.dry || '';
+        const yieldPct = (fresh && dry) ? ((dry/fresh)*100).toFixed(1) : '';
+        return `"${l.date}","${l.plantId || ''}","${(l.text || '').replace(/"/g,'""')}","${tags}","${m.ph || ''}","${m.ec || ''}","${m.temp || ''}","${m.humidity || ''}","${fresh}","${dry}","${yieldPct}"`;
+    }).join('\n');
+    const blob = new Blob([header + rows], {type: 'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `grow420-logs-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+}
+
+async function importData(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (!data.version) { alert('File non valido'); resolve(false); return; }
+                if (!confirm('Questo sovrascriverà tutti i dati esistenti. Continuare?')) { resolve(false); return; }
+                // Restore localStorage
+                if (data.localStorage) { Object.keys(data.localStorage).forEach(k => localStorage.setItem(k, data.localStorage[k])); }
+                // Restore IndexedDB
+                await db.transaction('rw', db.plants, db.logs, db.photos, db.reminders, db.settings, async () => {
+                    await db.plants.clear(); if (data.indexedDB.plants) await db.plants.bulkAdd(data.indexedDB.plants);
+                    await db.logs.clear(); if (data.indexedDB.logs) await db.logs.bulkAdd(data.indexedDB.logs);
+                    await db.photos.clear(); if (data.indexedDB.photos) await db.photos.bulkAdd(data.indexedDB.photos);
+                    await db.reminders.clear(); if (data.indexedDB.reminders) await db.reminders.bulkAdd(data.indexedDB.reminders);
+                    await db.settings.clear(); if (data.indexedDB.settings) await db.settings.bulkAdd(data.indexedDB.settings);
+                });
+                alert("Dati importati con successo! L'app verrà ricaricata.");
+                location.reload();
+                resolve(true);
+            } catch(err) { console.error(err); alert("Errore durante l'importazione: " + err.message); resolve(false); }
+        };
+        reader.readAsText(file);
+    });
+}
+
+// ── 10. STRUCTURED LOG SYSTEM ─────────────────────────────
+async function addStructuredLog(plantId, text, metrics, photoFiles) {
+    const tags = [];
+    const tagMatches = text.match(/#(\\w+)/g);
+    if (tagMatches) tagMatches.forEach(t => tags.push(t.slice(1)));
+    const log = { plantId, date: new Date().toLocaleString('it-IT'), text, tags, metrics: metrics || {}, photos: [] };
+    const logId = await db.logs.add(log);
+    // Salva foto
+    if (photoFiles && photoFiles.length) {
+        for (const file of photoFiles) {
+            const photoId = await addPhoto(plantId, file);
+            await db.photos.update(photoId, { logId });
+            log.photos.push(photoId);
+        }
+        await db.logs.update(logId, { photos: log.photos });
+    }
+    // Mantieni compatibilità localStorage
+    const plants = lsGet('grow-plants', []);
+    const idx = plants.findIndex(p => p.id === plantId);
+    if (idx >= 0) {
+        if (!plants[idx].logs) plants[idx].logs = [];
+        plants[idx].logs.push({ date: log.date, text: log.text });
+        lsSet('grow-plants', plants);
+    }
+    return logId;
+}
+
+// ═══════════════════════════════════════════════════════════
+
+const phaseIconFiles=['01_Setup.png','02_Germinazione.png','03_Seedling.png','04_Vegetativa.png','05_Pre-Fioritura.png','06_Fioritura.png','07_Flushing.png','08_Raccolta.png','09_Essiccazione.png','10_Curing.png'];
+
+const phases=[
+{id:0,name:"Setup",subtitle:"Preparazione ambiente",emoji:`<img src="assets/${phaseIconFiles[0]}" style="width:20px;height:20px;object-fit:cover;display:inline-block;vertical-align:middle;image-rendering:pixelated;flex-shrink:0;border-radius:2px">`,duration:"1–2 giorni",tag:"Pre-grow",color:"#39ff14",light:"—",temp:"18–25°C",humidity:"Qualsiasi",water:"—",nutrients:"Nessuno",steps:[{label:"Monta il grow tent",detail:"Assembla la tenda nel posto definitivo. Assicurati che il pavimento regga il peso."},{label:"Installa la lampada LED",detail:"Appendi la LED al centro del tent. Distanza iniziale: 50–60cm."},{label:"Collega ventilazione",detail:"Ventilatore in basso → aria fresca. Filtro carboni in alto → odori escono."},{label:"Posiziona igrometro/termometro",detail:"Metti il sensore all'altezza delle cime future, non vicino alla lampada."},{label:"Prepara il substrato",detail:"Terra leggera + 20% perlite. Riempi vasi da germinazione (0.5–1L)."},{label:"Testa il pH-metro",detail:"Calibra con soluzione inclusa. pH target acqua: 6.0–6.5."},{label:"Configura il timer",detail:"Imposta 18h luce / 6h buio per la fase veg."}],tips:["Fai girare il tent vuoto per 24h prima di mettere le piante.","Usa una presa multipla con protezione da sovratensione."],problems:[]},
+{id:1,name:"Germinazione",subtitle:"Il seme si sveglia",emoji:`<img src="assets/${phaseIconFiles[1]}" style="width:20px;height:20px;object-fit:cover;display:inline-block;vertical-align:middle;image-rendering:pixelated;flex-shrink:0;border-radius:2px">`,duration:"3–7 giorni",tag:"Settimana 0",color:"#8fb87a",light:"Nessuna (o luce tenue)",temp:"22–26°C",humidity:"70–80%",water:"Pochissima",nutrients:"Zero",steps:[{label:"Metodo bicchiere d'acqua",detail:"Metti il seme in acqua a temperatura ambiente (pH 6.5) per 12–24h."},{label:"Metodo carta umida",detail:"Tra due fogli di carta bagnati, in sacchetto zip chiuso, posto caldo e buio."},{label:"Controlla ogni 12h",detail:"Tieni umida la carta senza inzupparla. Usa pinzette."},{label:"Aspetta la radichetta",detail:"Quando è lunga 0.5–1cm, è pronta per essere piantata."},{label:"Pianta nel substrato",detail:"Buchino da 1cm, radichetta verso il basso, copri leggermente."},{label:"Crea umidità alta",detail:"Copri con cupola di plastica. Togli 10 min al giorno per arieggiare."}],tips:["Non innaffiare il substrato — spruzza intorno al seme.","Il caldo accelera: un tappetino riscaldante aiuta."],problems:[{prob:"Seme non germina dopo 7 giorni",sol:"Prova acqua ossigenata diluita (3%) per 1h prima di ritentare."},{prob:"Radichetta bruna/nera",sol:"Troppa umidità o muffa. Ricomincia con seme nuovo."}]},
+{id:2,name:"Seedling",subtitle:"La piantina emerge",emoji:`<img src="assets/${phaseIconFiles[2]}" style="width:20px;height:20px;object-fit:cover;display:inline-block;vertical-align:middle;image-rendering:pixelated;flex-shrink:0;border-radius:2px">`,duration:"7–14 giorni",tag:"Settimane 1–2",color:"#6db56d",light:"18h ON / 6h OFF",temp:"22–26°C",humidity:"65–75%",water:"Minima, solo intorno alla piantina",nutrients:"Zero (la terra è sufficiente)",steps:[{label:"Aspetta la prima apertura",detail:"I cotiledoni escono entro 24–48h dalla piantagione."},{label:"Rimuovi la cupola gradualmente",detail:"Dopo 3–4 giorni apri per qualche ora, poi rimuovi al giorno 5–7."},{label:"Accendi la lampada a distanza",detail:"LED a 50–60cm. Le piantine sono delicate."},{label:"Irrigazione leggera",detail:"Innaffia in cerchio intorno, mai sopra. Terra leggermente umida."},{label:"Aspetta le prime foglie vere",detail:"Dopo i cotiledoni arrivano foglie dentellate. A 2–3 set la fase è finita."},{label:"Controlla il pH dell'acqua",detail:"Ogni annaffiatura: pH 6.0–6.5. Usa drops correttori."}],tips:["Non sovrainnaffiare — è l'errore #1 dei principianti.","Brezza lieve rinforza lo stelo."],problems:[{prob:"Piantina si allunga tantissimo",sol:"Troppo poca luce. Avvicina la lampada."},{prob:"Foglie cotiledoni gialle in fretta",sol:"Normale — le cotiledoni si consumano."},{prob:"Stelo sottilissimo che si piega",sol:"Troppo poca ventilazione. Aggiungi brezza delicata."}]},
+{id:3,name:"Vegetativa",subtitle:"Crescita esplosiva",emoji:`<img src="assets/${phaseIconFiles[3]}" style="width:20px;height:20px;object-fit:cover;display:inline-block;vertical-align:middle;image-rendering:pixelated;flex-shrink:0;border-radius:2px">`,duration:"3–5 settimane",tag:"Settimane 3–7",color:"#4ea86a",light:"18h ON / 6h OFF",temp:"20–28°C",humidity:"50–65%",water:"Moderata, quando primi cm asciutti",nutrients:"Grow (N alto) — 50% dose",steps:[{label:"Trapianta in vaso più grande",detail:"Radici che fuoriescono = trapianta in 7–11L. Non disturbare la radice."},{label:"Inizia i nutrienti Grow",detail:"Dalla settimana 3, metà dose. Aumenta gradualmente."},{label:"Inizia LST",detail:"Piega il ramo principale verso il bordo del vaso. Fissalo con fil di ferro."},{label:"Topping (non per auto)",detail:"A 5–6 nodi, taglia la punta. La pianta farà 2 rami principali."},{label:"Mantieni le foglie pulite",detail:"Rimuovi foglie morte. Non toccare quelle sane."},{label:"Controlla ogni giorno",detail:"Osserva colore, forma, macchie. Prima rilevi, prima risolvi."},{label:"Trapianta in vaso finale",detail:"Verso la fine: vaso definitivo da 11–15L. Ultimo trapianto."}],tips:["Ruota il vaso di 90° ogni 2–3 giorni.","Test del dito: se umido a 3cm, non innaffiare.","Fotografa ogni 2–3 giorni per vedere i cambiamenti."],problems:[{prob:"Foglie con punte bruciate",sol:"Nutrient burn. Riduci dose del 30%, fai flush."},{prob:"Foglie gialle dal basso",sol:"Carenza azoto. Aumenta fertilizzante Grow."},{prob:"Crescita lenta",sol:"Controlla pH, luce e temperatura."}]},
+{id:4,name:"Pre-fioritura",subtitle:"La transizione",emoji:`<img src="assets/${phaseIconFiles[4]}" style="width:20px;height:20px;object-fit:cover;display:inline-block;vertical-align:middle;image-rendering:pixelated;flex-shrink:0;border-radius:2px">`,duration:"7–10 giorni",tag:"Settimana 7–8",color:"#b8a84a",light:"12h ON / 12h OFF (foto) — Auto 18/6",temp:"20–26°C",humidity:"45–55%",water:"Moderata",nutrients:"Transizione: riduci N, aumenta P e K",steps:[{label:"Cambia il ciclo di luce",detail:"12h luce / 12h buio per fotoperiodo. Le auto lo fanno da sole."},{label:"Osserva i pre-fiori",detail:"Pistilli bianchi = femmina ✅ / Sacchetti = maschio ❌. Rimuovi maschi."},{label:"Fai il lollipopping",detail:"Rimuovi rami e foglie nella parte bassa (sotto i 2/3)."},{label:"Cambia i nutrienti",detail:"Passa da Grow (N alto) a Bloom (P e K alti, N basso)."},{label:"Abbassa l'umidità",detail:"Riduci verso il 45–55%. Alta umidità = rischio muffa."}],tips:["Nessuna luce durante le 12h di buio.","Fai l'ultima foto prima che i fiori arrivino."],problems:[{prob:"Pianta non fiorisce dopo 2 settimane",sol:"Controlla luce durante il buio. Ogni fessura del tent."},{prob:"Appare un maschio",sol:"Rimuovilo subito prima che apra i sacchi pollinici."}]},
+{id:5,name:"Fioritura",subtitle:"I fiori si formano",emoji:`<img src="assets/${phaseIconFiles[5]}" style="width:20px;height:20px;object-fit:cover;display:inline-block;vertical-align:middle;image-rendering:pixelated;flex-shrink:0;border-radius:2px">`,duration:"6–9 settimane",tag:"Settimane 8–16",color:"#c47a3a",light:"12h/12h (foto) / 18–20h (auto)",temp:"18–25°C",humidity:"40–50%",water:"Abbondante",nutrients:"Bloom (PK alto) — piena dose",steps:[{label:"Osserva i fiori crescere",detail:"Le cime si formano sulle punte. Pistilli bianchi sempre più densi."},{label:"Avvicina la lampada",detail:"Abbassa LED a 35–45cm. Più luce = cime più dense."},{label:"Sostieni i rami pesanti",detail:"Tutori bambù o clip per rami che si piegano."},{label:"Nutrienti piena dose",detail:"Bloom a dose piena. Aggiungi booster PK nelle settimane di picco."},{label:"Controlla umidità ogni giorno",detail:"Fiori densi + umidità alta = Bud Rot. Mantieni sotto il 50%."},{label:"Defoliazione leggera",detail:"Rimuovi solo foglie grandi che ombrano le cime."},{label:"Tieni traccia delle settimane",detail:"Conta dalla prima comparsa dei fiori per capire quando raccogliere."}],tips:["Terpeni si sviluppano meglio con sbalzo termico notte/giorno (3–5°C).","Non spruzzare acqua sulle cime in fioritura.","Le cime in alto maturano prima di quelle in basso."],problems:[{prob:"Bud Rot (muffa grigia nei fiori)",sol:"Rimuovi subito con forbici sterilizzate. Abbassa umidità."},{prob:"Fiori pallidi e poco densi",sol:"Luce insufficiente. Avvicina la LED."},{prob:"Foglie arricciate verso il basso",sol:"Overwatering. Lascia asciugare di più."}]},
+{id:6,name:"Flushing",subtitle:"Pulizia finale",emoji:`<img src="assets/${phaseIconFiles[6]}" style="width:20px;height:20px;object-fit:cover;display:inline-block;vertical-align:middle;image-rendering:pixelated;flex-shrink:0;border-radius:2px">`,duration:"7–14 giorni",tag:"Ultime 1–2 settimane",color:"#4a8ab5",light:"Invariato",temp:"18–24°C",humidity:"40–45%",water:"Abbondante — solo acqua pH 6.0–6.5",nutrients:"ZERO — solo acqua pulita",steps:[{label:"Riconosci i segnali di maturità",detail:"Foglie che ingialliscono. Pistilli arrossati. Pianta che rallenta."},{label:"Controlla i tricomi",detail:"Lente 30–60x: trasparenti=immaturi / lattiginosi=pronti / ambrati=maturi."},{label:"Inizia il flush",detail:"Solo acqua pulita pH 6.0–6.5. L'acqua in eccesso porta via i sali."},{label:"Ripeti ogni 2–3 giorni",detail:"Per 7–14 giorni solo acqua. Le foglie ingialliscono, è normale."},{label:"Osserva il cambiamento",detail:"Tricomi ambrati aumentano. Aroma più intenso."}],tips:["Un buon flush migliora drasticamente il sapore.","Assaggia una foglia: amara = continua, neutra = pronto.","Ultime 48h al buio completo per più resina."],problems:[{prob:"Pianta perde foglie rapidamente",sol:"Normale durante il flush. I fiori devono restare sani."}]},
+{id:7,name:"Raccolta",subtitle:"Il momento della verità",emoji:`<img src="assets/${phaseIconFiles[7]}" style="width:20px;height:20px;object-fit:cover;display:inline-block;vertical-align:middle;image-rendering:pixelated;flex-shrink:0;border-radius:2px">`,duration:"1 giorno",tag:"Harvest Day",color:"#c4823a",light:"Spegni tutto prima di tagliare",temp:"18–22°C",humidity:"50%",water:"Nessuna — ultima annaffiatura 2 giorni prima",nutrients:"Nessuno",steps:[{label:"Prepara il materiale",detail:"Forbici da trimming, vassoi, guanti in nitrile, filo per appendere."},{label:"Taglia alla base",detail:"Taglia la pianta allo stelo principale. Wet trim o dry trim."},{label:"Wet trim",detail:"Rimuovi fan leaves subito. Lascia sugar leaves per dopo."},{label:"Dividi in rami",detail:"Rami di 20–30cm per facilitare l'essiccazione."},{label:"Pesa il raccolto fresco",detail:"100g freschi = ~20–25g secchi. Annota il peso."},{label:"Appendi i rami a testa in giù",detail:"Stanza buia, circolazione d'aria ma senza correnti dirette."}],tips:["Indossa guanti: la resina si attacca alle dita.","Lavora in ambiente pulito.","Raccogli sugar leaves separatamente per hash/edibles."],problems:[{prob:"Fiori con odore di fieno dopo il taglio",sol:"Normale nelle prime ore. Se persiste = essiccazione troppo rapida."}]},
+{id:8,name:"Essiccazione",subtitle:"Pazienza è la chiave",emoji:`<img src="assets/${phaseIconFiles[8]}" style="width:20px;height:20px;object-fit:cover;display:inline-block;vertical-align:middle;image-rendering:pixelated;flex-shrink:0;border-radius:2px">`,duration:"7–14 giorni",tag:"Post-harvest",color:"#8a7a4a",light:"Buio totale",temp:"15–20°C",humidity:"45–55%",water:"—",nutrients:"—",steps:[{label:"Imposta il posto",detail:"Buio, 15–20°C, umidità 45–55%. Ventilatore per circolazione, non diretto sui fiori."},{label:"Controlla ogni giorno",detail:"Niente fiori che si toccano. Odore ammoniacale = muffa."},{label:"Test dello stelo",detail:"Dopo 7 giorni: si flette = umido / si spezza = pronto per curing."},{label:"Dry trim",detail:"Rimuovi foglie rimaste con forbici piccole. Taglia fiori dai rami."},{label:"Non affrettare",detail:"Essiccazione rapida = sapore di fieno. Lenta e fresca = qualità superiore."}],tips:["Umidità troppo alta? Deumidificatore.","Troppo bassa? Ciotola d'acqua vicino ai rami.","Ideale: 10–14 giorni a 18°C / 50% umidità."],problems:[{prob:"Odore ammoniacale / muffa",sol:"Isola rami infetti. Aumenta ventilazione, abbassa umidità."},{prob:"Fiori secchi in 3–4 giorni",sol:"Troppo caldo/asciutto. Qualità compromessa."}]},
+{id:9,name:"Curing",subtitle:"La stagionatura che fa la differenza",emoji:`<img src="assets/${phaseIconFiles[9]}" style="width:20px;height:20px;object-fit:cover;display:inline-block;vertical-align:middle;image-rendering:pixelated;flex-shrink:0;border-radius:2px">`,duration:"2–8 settimane",tag:"Finale",color:"#7a4ea8",light:"Buio totale (barattoli chiusi)",temp:"18–22°C",humidity:"58–65%",water:"—",nutrients:"—",steps:[{label:"Prepara i barattoli",detail:"Vetro a chiusura ermetica. Pulisci e asciuga perfettamente."},{label:"Riempi a ¾",detail:"Non pressare. Lascia respirare. 2/3–3/4 del barattolo."},{label:"Burping settimane 1–2",detail:"Apri 1–2 volte al giorno per 15–20 min. Odore ammoniacale = tieni aperti 2–4h."},{label:"Monitora umidità",detail:"Ideale 58–62%. Usa Boveda pack 62% per stabilità."},{label:"Burping settimane 3–4",detail:"Riduci a 1 volta ogni 2–3 giorni. Sapori si complessificano."},{label:"Curing lungo",detail:"Dopo 4 settimane è pronto. Fino a 8 settimane = qualità superiore."},{label:"Conservazione finale",detail:"Barattoli chiusi al buio e fresco. Dura 6–12 mesi."}],tips:["Il curing trasforma fiori mediocri in eccellenti.","Boveda pack 62% = curing perfetto senza pensarci.","Etichetta con varietà e data di inizio."],problems:[{prob:"Muffa nel barattolo",sol:"Rimuovi fiori infetti. Sterilizza. Più burping per i sani."},{prob:"Fiori troppo secchi",sol:"Boveda pack 62% — re-idrata in 2–3 giorni."},{prob:"Fiori troppo umidi (>70%)",sol:"Barattolo aperto alcune ore al giorno finché scende sotto 65%."}]}
+];
+
+const strains=[
+{name:"White Widow",type:"Hybrid",chemotype:"type1",thc:"18–25%",cbd:"<1%",flowerTime:"8–9 settimane",yield:"450–550g/m²",difficulty:"Facile",desc:"Leggenda olandese. Euforia cerebrale e relax fisico.",claims:{thc_range:[18,25],cbd_range:[0,1],flower_days:[56,63],yield_g_m2:[450,550],source_type:"seed_bank",source_url:"https://www.royalqueenseeds.com",source_date:"2024-03-15"},lab_results:[],terpenes:["Myrcene","Caryophyllene"],genetics:"Brazilian Sativa landrace x South Indian Indica landrace",effects:["Euforia","Relax fisico"],flavors:["Terra","Pino"],growNotes:"Resistente a muffa. Supportare rami in bloom.",evidence:"source",verifiedSources:[{label:"Royal Queen Seeds",url:"https://www.royalqueenseeds.com",type:"breeder"},{label:"Leafly",url:"https://www.leafly.com",type:"aggregator"}]},
+{name:"Amnesia Haze",type:"Sativa",chemotype:"type1",thc:"20–25%",cbd:"<1%",flowerTime:"10–12 settimane",yield:"500–600g/m²",difficulty:"Media",desc:"Sativa energizzante citrica. Richiede spazio e pazienza.",claims:{thc_range:[20,25],cbd_range:[0,1],flower_days:[70,84],yield_g_m2:[500,600],source_type:"seed_bank",source_url:"https://www.royalqueenseeds.com",source_date:"2024-03-15"},lab_results:[],terpenes:["Limonene","Terpinolene"],genetics:"Landrace Haze x linee Thai/Afghani",effects:["Energia","Creatività"],flavors:["Agrumi","Pino"],growNotes:"Richiede spazio verticale. LST consigliato.",evidence:"source",verifiedSources:[{label:"Royal Queen Seeds",url:"https://www.royalqueenseeds.com",type:"breeder"},{label:"Leafly",url:"https://www.leafly.com",type:"aggregator"}]},
+{name:"OG Kush",type:"Hybrid",chemotype:"type1",thc:"19–26%",cbd:"<1%",flowerTime:"8–9 settimane",yield:"350–450g/m²",difficulty:"Media",desc:"Icona californiana. Profumo pino e agrumi. Effetto potente.",claims:{thc_range:[19,26],cbd_range:[0,1],flower_days:[56,63],yield_g_m2:[350,450],source_type:"seed_bank",source_url:"https://www.leafly.com",source_date:"2024-03-15"},lab_results:[],terpenes:["Myrcene","Limonene","Caryophyllene"],genetics:"Chemdawg x Lemon Thai x Pakistani Kush (lignaggio contestato dai breeder)",effects:["Relax","Euforia"],flavors:["Pino","Agrumi"],growNotes:"Sensibile a muffa. Buona aerazione essenziale.",evidence:"source",verifiedSources:[{label:"Leafly",url:"https://www.leafly.com",type:"aggregator"},{label:"Grow Weed Easy",url:"https://www.growweedeasy.com",type:"source"}]},
+{name:"Girl Scout Cookies",type:"Hybrid",chemotype:"type1",thc:"20–28%",cbd:"<1%",flowerTime:"9–10 settimane",yield:"400–500g/m²",difficulty:"Media",desc:"Dolce e terrosa. Euforia cerebrale poi relax profondo.",claims:{thc_range:[20,28],cbd_range:[0,1],flower_days:[63,70],yield_g_m2:[400,500],source_type:"seed_bank",source_url:"https://www.leafly.com",source_date:"2024-03-15"},lab_results:[],terpenes:["Caryophyllene","Limonene","Humulene"],genetics:"OG Kush x Durban Poison",effects:["Euforia","Relax profondo"],flavors:["Dolce","Terroso"],growNotes:"Resistente. Ottima per training.",evidence:"community",verifiedSources:[{label:"Leafly",url:"https://www.leafly.com",type:"aggregator"}]},
+{name:"Blue Dream",type:"Hybrid",chemotype:"type1",thc:"17–24%",cbd:"<1%",flowerTime:"9–10 settimane",yield:"500–600g/m²",difficulty:"Facile",desc:"Crescita vigorosa, resa alta. Sapore mirtilli dolci.",claims:{thc_range:[17,24],cbd_range:[0,1],flower_days:[63,70],yield_g_m2:[500,600],source_type:"seed_bank",source_url:"https://www.royalqueenseeds.com",source_date:"2024-03-15"},lab_results:[],terpenes:["Myrcene","Pinene"],genetics:"Blueberry x Haze",effects:["Relax","Euforia leggera"],flavors:["Mirtillo","Dolce"],growNotes:"Vigorosa. Supportare rami pesanti.",evidence:"source",verifiedSources:[{label:"Royal Queen Seeds",url:"https://www.royalqueenseeds.com",type:"breeder"},{label:"Leafly",url:"https://www.leafly.com",type:"aggregator"}]},
+{name:"Gorilla Glue #4",type:"Hybrid",chemotype:"type1",thc:"25–30%",cbd:"<1%",flowerTime:"8–9 settimane",yield:"450–550g/m²",difficulty:"Media",desc:"THC sky-high. Effetto pesante. Resina abbondante.",claims:{thc_range:[25,30],cbd_range:[0,1],flower_days:[56,63],yield_g_m2:[450,550],source_type:"seed_bank",source_url:"https://www.leafly.com",source_date:"2024-03-15"},lab_results:[],terpenes:["Caryophyllene","Limonene","Myrcene"],genetics:"Chem's Sister x Sour Dubb x Chocolate Diesel",effects:["Pesante","Sedazione"],flavors:["Terra","Diesel"],growNotes:"Resina molto abbondante. Difficile da trimmare.",evidence:"lab",verifiedSources:[{label:"Leafly",url:"https://www.leafly.com",type:"aggregator"},{label:"Grow Weed Easy",url:"https://www.growweedeasy.com",type:"source"}]},
+{name:"Zkittlez",type:"Indica",chemotype:"type1",thc:"19–23%",cbd:"<1%",flowerTime:"8–9 settimane",yield:"400–500g/m²",difficulty:"Facile",desc:"Esplosione frutta tropicale dolce. Relax senza sedazione.",claims:{thc_range:[19,23],cbd_range:[0,1],flower_days:[56,63],yield_g_m2:[400,500],source_type:"seed_bank",source_url:"https://www.leafly.com",source_date:"2024-03-15"},lab_results:[],terpenes:["Myrcene","Humulene"],genetics:"Grape Ape x Grapefruit",effects:["Relax","Felicità"],flavors:["Frutta tropicale","Dolce"],growNotes:"Compatta. Ideale per SOG.",evidence:"community",verifiedSources:[{label:"Leafly",url:"https://www.leafly.com",type:"aggregator"}]},
+{name:"Runtz",type:"Hybrid",chemotype:"type1",thc:"23–29%",cbd:"<1%",flowerTime:"8–9 settimane",yield:"400–500g/m²",difficulty:"Media",desc:"Croce Zkittlez x Gelato. Dolce fruttato, potente e bilanciato.",claims:{thc_range:[23,29],cbd_range:[0,1],flower_days:[56,63],yield_g_m2:[400,500],source_type:"seed_bank",source_url:"https://www.leafly.com",source_date:"2024-03-15"},lab_results:[],terpenes:["Limonene","Caryophyllene"],genetics:"Zkittlez x Gelato",effects:["Euforia","Relax"],flavors:["Dolce","Fruttato"],growNotes:"Equilibrata. Buona per principianti intermedi.",evidence:"lab",verifiedSources:[{label:"Leafly",url:"https://www.leafly.com",type:"aggregator"}]},
+{name:"Critical + 2.0",type:"Indica",chemotype:"type1",thc:"18–22%",cbd:"<1%",flowerTime:"6–7 settimane",yield:"600–700g/m²",difficulty:"Facile",desc:"Resa mostruosa in tempi record. Ideale per principianti.",claims:{thc_range:[18,22],cbd_range:[0,1],flower_days:[42,49],yield_g_m2:[600,700],source_type:"seed_bank",source_url:"https://www.royalqueenseeds.com",source_date:"2024-03-15"},lab_results:[],terpenes:["Myrcene","Limonene"],genetics:"Critical Mass x Northern Light selezionata",effects:["Relax","Sonno"],flavors:["Limone","Pino"],growNotes:"Molto resistente. Ottima per outdoor.",evidence:"source",verifiedSources:[{label:"Royal Queen Seeds",url:"https://www.royalqueenseeds.com",type:"breeder"}]}
+];
+
+
+const evidenceLevels={
+    lab:{icon:"🟢",label:"Dato Lab",short:"Lab",color:"#39ff14",desc:"Verificato da analisi di laboratorio (COA) o misurazione diretta."},
+    study:{icon:"🟡",label:"Studio Scientifico",short:"Studio",color:"#f0e800",desc:"Supportato da letteratura scientifica o studi pubblicati/peer-reviewed."},
+    source:{icon:"🟠",label:"Fonte Tecnica",short:"Fonte",color:"#ff6600",desc:"Da fonte tecnica di settore (breeder, seed bank, guide specializzate), non peer-reviewed."},
+    community:{icon:"⚪",label:"Esperienza Community",short:"Community",color:"#aaaaaa",desc:"Basato su esperienza aneddotica e consenso della community grower."}
+};
+
+const chemotypeInfo={
+    type1:{label:"Type I — THC-dominante",short:"Type I",desc:"Rapporto THC:CBD elevato (>5:1). La maggior parte delle varietà ricreative moderne."},
+    type2:{label:"Type II — Bilanciato",short:"Type II",desc:"Rapporto THC:CBD vicino a 1:1. Effetto psicoattivo attenuato dal CBD."},
+    type3:{label:"Type III — CBD-dominante",short:"Type III",desc:"Rapporto CBD:THC elevato (>5:1). Effetto perlopiù non psicoattivo."}
+};
+
+const diagnosisEngine={
+collect:{
+symptom:"",
+distribution:"",
+timeline:"",
+metrics:{ph:null,ec:null,temp:null,humidity:null},
+photos:[],
+stage:""
+},
+hypotheses:[
+{
+id:"n_deficiency",
+name:"Carenza Azoto (N)",
+confidence:0,
+evidence:"study",
+required_metrics:["ph"],
+rules:[
+{field:"distribution",value:"vecchie",weight:30},
+{field:"stage",value:"veg",weight:20},
+{field:"metrics.ph",min:6.0,max:6.5,weight:15}
+],
+fix:[
+{action:"Aumenta fertilizzante Grow (N alto)",evidence:"source"},
+{action:"Verifica pH in range 6.0-6.5",evidence:"study"}
+],
+disclaimer:"Escludere prima lockout da pH errato"
+},
+{
+id:"ph_lockout",
+name:"Lockout nutrizionale (pH)",
+confidence:0,
+evidence:"study",
+rules:[
+{field:"metrics.ph",outside:[6.0,6.5],weight:40},
+{field:"distribution",value:"uniforme",weight:20}
+],
+fix:[
+{action:"Correggi pH dell'acqua",evidence:"study"},
+{action:"Se pH terra < 5.5: flush leggero",evidence:"source"}
+]
+},
+{
+id:"nutrient_burn",
+name:"Nutrient Burn (eccesso)",
+confidence:0,
+evidence:"source",
+rules:[
+{field:"distribution",value:"punte",weight:35},
+{field:"metrics.ec",min:2.5,weight:30}
+],
+fix:[
+{action:"Riduci dose fertilizzante del 30%",evidence:"source"},
+{action:"Flush con acqua pulita pH 6.0-6.5",evidence:"source"}
+]
+},
+{
+id:"overwatering",
+name:"Overwatering",
+confidence:0,
+evidence:"community",
+rules:[
+{field:"distribution",value:"uniforme",weight:25},
+{field:"timeline",value:"dopo innaffio",weight:30}
+],
+fix:[
+{action:"Lascia asciugare il substrato prima del prossimo ciclo",evidence:"community"},
+{action:"Verifica drenaggio del vaso",evidence:"source"}
+]
+},
+{
+id:"bud_rot",
+name:"Bud Rot (Botrytis)",
+confidence:0,
+evidence:"study",
+rules:[
+{field:"symptom",value:"muffa",weight:50},
+{field:"metrics.humidity",min:55,weight:30}
+],
+fix:[
+{action:"Rimuovi immediatamente le parti infette",evidence:"study"},
+{action:"Abbassa umidità sotto il 45%",evidence:"study"}
+],
+disclaimer:"Irreversibile se esteso. Non consumare fiori infetti."
+},
+{
+id:"spider_mites",
+name:"Ragnetto Rosso",
+confidence:0,
+evidence:"community",
+rules:[
+{field:"symptom",value:"puntini",weight:40},
+{field:"distribution",value:"vecchie",weight:15}
+],
+fix:[
+{action:"Spray acqua + sapone di Marsiglia ogni 3 giorni",evidence:"community"},
+{action:"Aumenta umidità temporaneamente",evidence:"source"}
+]
+},
+{
+id:"fungus_gnat",
+name:"Fungus Gnat",
+confidence:0,
+evidence:"source",
+rules:[
+{field:"symptom",value:"puntini",weight:20},
+{field:"timeline",value:"dopo innaffio",weight:25}
+],
+fix:[
+{action:"Lascia asciugare terra. Trappole gialle.",evidence:"source"},
+{action:"Sabbia fine sul substrato",evidence:"community"}
+]
+},
+{
+id:"etiolation",
+name:"Etiolamento (luce scarsa)",
+confidence:0,
+evidence:"study",
+rules:[
+{field:"symptom",value:"allungamento",weight:45},
+{field:"stage",value:"seedling",weight:20}
+],
+fix:[
+{action:"Avvicina lampada LED. Minimo 200-300 PPFD.",evidence:"study"},
+{action:"Riduci distanza luce-pianta",evidence:"source"}
+]
+},
+{
+id:"cal_mag_deficiency",
+name:"Carenza Cal/Mag",
+confidence:0,
+evidence:"source",
+rules:[
+{field:"distribution",value:"nuove",weight:30},
+{field:"metrics.ph",min:6.0,max:6.5,weight:10}
+],
+fix:[
+{action:"Aggiungi CalMag alla prossima annaffiatura",evidence:"source"},
+{action:"Verifica pH in range 6.0-6.5",evidence:"study"}
+]
+},
+{
+id:"p_deficiency",
+name:"Carenza Fosforo (P)",
+confidence:0,
+evidence:"study",
+rules:[
+{field:"distribution",value:"vecchie",weight:25},
+{field:"stage",value:"bloom",weight:25}
+],
+fix:[
+{action:"Aumenta fertilizzante Bloom (PK alto)",evidence:"source"},
+{action:"Temperatura notturna >15°C",evidence:"study"}
+]
+}
+],
+evaluate(input){
+if(!input)return [];
+const results=this.hypotheses.map(h=>{
+let score=0;
+h.rules.forEach(r=>{
+if(r.field==="distribution"&&input.distribution===r.value)score+=r.weight;
+if(r.field==="stage"&&input.stage===r.value)score+=r.weight;
+if(r.field==="symptom"&&input.symptom===r.value)score+=r.weight;
+if(r.field==="timeline"&&input.timeline===r.value)score+=r.weight;
+if(r.field==="metrics.ph"&&input.metrics&&input.metrics.ph!==null&&input.metrics.ph!==""){
+const ph=parseFloat(input.metrics.ph);
+if(!isNaN(ph)){
+if(r.min!==undefined&&r.max!==undefined&&ph>=r.min&&ph<=r.max)score+=r.weight;
+if(r.outside&&Array.isArray(r.outside)&&(ph<r.outside[0]||ph>r.outside[1]))score+=r.weight;
+}
+}
+if(r.field==="metrics.ec"&&input.metrics&&input.metrics.ec!==null&&input.metrics.ec!==""){
+const ec=parseFloat(input.metrics.ec);
+if(!isNaN(ec)&&r.min!==undefined&&ec>=r.min)score+=r.weight;
+}
+if(r.field==="metrics.humidity"&&input.metrics&&input.metrics.humidity!==null&&input.metrics.humidity!==""){
+const hum=parseFloat(input.metrics.humidity);
+if(!isNaN(hum)&&r.min!==undefined&&hum>=r.min)score+=r.weight;
+}
+});
+return{...h,confidence:Math.min(score,95)};
+});
+return results.sort((a,b)=>b.confidence-a.confidence);
+}
+};
+
+
+const libraryData = [
+    {
+        id: 0,
+        title: "Grow Guide Completo",
+        category: "guida",
+        icon: "🌱",
+        color: "#39ff14",
+        desc: "Guida passo-passo dalla germinazione al curing con tecniche avanzate.",
+        evidence: "source",
+        content: `# Grow Guide Completo
+
+## Germinazione Perfetta
+
+La germinazione è il momento più delicato. Un seme sano ha colore marrone scuro con venature tigre e si sente duro al tatto.
+
+**Metodo consigliato: Bicchiere + Carta**
+
+- Metti il seme in acqua a temperatura ambiente (20-25°C) per 12-24h
+- Quando affonda, passalo tra due fogli di carta bagnata
+- Inserisci in sacchetto zip chiuso, posto caldo e buio
+- Controlla ogni 12h. La radichetta deve essere 0.5-1cm prima di piantare
+
+> **Temperatura ideale:** 22-26°C | **Umidità:** 70-80%
+
+## Vegetativa: Costruisci la Struttura
+
+La fase vegetativa è dove decidi la forma finale della pianta.
+
+### LST (Low Stress Training)
+Piega i rami principali verso i lati del vaso. Usa fil di ferro rivestito o soft-ties. **Mai piegare a 90° netti** — curva dolce per non rompere il vaso.
+
+### Topping
+A 4-6 nodi, taglia la punta di crescita tra i nodi. La pianta dividerà l'energia in 2 rami principali. **Non fare topping su autofiorenti.**
+
+### Defoliazione Strategica
+Rimuovi solo foglie che:
+- Sono gialle o morte
+- Ombreggiano cime inferiori sane
+- Bloccano l'aria tra i rami
+
+## Fioritura: Massimizza la Resa
+
+### Settimane 1-3: Transizione
+- Cambia nutrienti a Bloom (PK alto)
+- Abbassa umidità al 45-50%
+- Avvicina la LED a 35-45cm
+
+### Settimane 4-6: Swelling
+Le cime si ingrossano. Aggiungi booster PK. **Non spruzzare acqua sulle cime.**
+
+### Settimane 7-9: Maturation
+Osserva i tricomi con lente 60x:
+- **Trasparenti** = troppo presto
+- **Lattiginosi** = effetto cerebrale (THC max)
+- **Ambrati** = effetto sedativo (CBN aumenta)
+
+## Flushing e Raccolta
+
+Il flush dura 7-14 giorni. Solo acqua pH 6.0-6.5. Le foglie ingialliscono — è normale.
+
+**Test dello stelo:** si spezza netto = pronto per curing.`,
+        versions: [
+            {date:"2024-01-15",author:"GROW 420 Team",content:"# Grow Guide Completo\n\n## Germinazione\n\nMetti il seme in acqua per 24h, poi in carta umida fino alla radichetta.\n\n## Vegetativa\n\nDai luce e nutrienti, la pianta cresce.\n\n## Fioritura\n\nCambia il fotoperiodo e aspetta la maturazione dei tricomi.\n\n## Raccolta\n\nTaglia quando i tricomi sono pronti."},
+            {date:"2024-08-09",author:"GROW 420 Team",content:"# Grow Guide Completo\n\n## Germinazione Perfetta\n\nLa germinazione è il momento più delicato. Un seme sano ha colore marrone scuro con venature tigre e si sente duro al tatto.\n\n**Metodo consigliato: Bicchiere + Carta**\n\n- Metti il seme in acqua a temperatura ambiente (20-25°C) per 12-24h\n- Quando affonda, passalo tra due fogli di carta bagnata\n- Inserisci in sacchetto zip chiuso, posto caldo e buio\n- Controlla ogni 12h. La radichetta deve essere 0.5-1cm prima di piantare\n\n## Vegetativa: Costruisci la Struttura\n\nLa fase vegetativa è dove decidi la forma finale della pianta.\n\n## Flushing e Raccolta\n\nIl flush dura 7-14 giorni. Solo acqua pH 6.0-6.5. Le foglie ingialliscono — è normale.\n\n**Test dello stelo:** si spezza netto = pronto per curing."}
+        ]
+    },
+    {
+        id: 1,
+        title: "LST: Low Stress Training",
+        category: "tecnica",
+        icon: "🌿",
+        color: "#6db56d",
+        desc: "Tecniche di training senza stress per massimizzare la resa.",
+        evidence: "source",
+        meta: {
+            author: "GROW 420 Team",
+            revised: "2024-08-09",
+            sources: [
+                {label: "Grow Weed Easy", url: "https://www.growweedeasy.com"},
+                {label: "Royal Queen Seeds", url: "https://www.royalqueenseeds.com"}
+            ]
+        },
+        content: `# LST: Low Stress Training
+
+## Cos'è il LST?
+
+Il LST è la tecnica di piegare e legare i rami della cannabis per creare una pianta più bassa, larga e produttiva. A differenza del topping, **non ferisce la pianta** — stimola solo la crescita orizzontale.
+
+## Perché funziona
+
+La cima dominante (apical dominance) produce auxina, un ormone che inibisce la crescita dei rami laterali. Piegarla verso il basso distribuisce l'auxina in modo uniforme, facendo crescere tutti i rami come "cime principali".
+
+## Materiali necessari
+
+- Fil di ferro plastificato o soft-tie garden wire
+- Fori sul bordo del vaso o ganci
+- Forbici sterili (per eventuali legature)
+- Pazienza
+
+## Tecnica Base: Mainline
+
+1. **Aspetta 4-6 nodi** — la pianta deve essere robusta
+2. **Piega il fusto principale** verso il bordo del vaso, legandolo leggermente
+3. **Posiziona i rami laterali** verso l'alto usando fili separati
+4. **Ripeti ogni 2-3 giorni** man mano che crescono nuovi rami
+
+## Tecnica Avanzata: ScrOG
+
+Lo Screen of Green usa una rete (mesh) sopra la pianta:
+
+- Installa la rete a 20-30cm dal vaso
+- Piega i rami che superano la rete sotto i fori
+- Riempi tutta la superficie della rete con cime alla stessa altezza
+
+**Vantaggio:** Luce uniforme su tutte le cime = resa massima.
+
+## Timing
+
+| Fase | Azione |
+|------|--------|
+| Veg settimana 2-3 | Inizia LST |
+| Veg settimana 4-5 | Aggiusta rami, allunga legature |
+| Pre-fioritura | Stop LST, lascia crescere |
+| Fioritura | Solo supporto rami pesanti |
+
+## Errori comuni
+
+- **Piegare troppo presto** — stelo troppo sottile si spezza
+- **Legature troppo strette** — strangolano il flusso di linfa
+- **Toccare i fiori** durante fioritura — stress e rischio muffa`
+    },
+    {
+        id: 2,
+        title: "Botanica della Cannabis",
+        category: "scienza",
+        icon: "🔬",
+        color: "#00ffff",
+        desc: "Anatomia della pianta, fotosintesi e fisiologia avanzata.",
+        evidence: "study",
+        meta: {
+            author: "GROW 420 Team",
+            revised: "2024-08-09",
+            sources: [
+                {label: "Grow Weed Easy", url: "https://www.growweedeasy.com"},
+                {label: "Royal Queen Seeds", url: "https://www.royalqueenseeds.com"}
+            ]
+        },
+        content: `# Botanica della Cannabis
+
+## Anatomia della Pianta
+
+### Radici
+Il sistema radicale della cannabis è **a fascio** — un taproot principale con radici secondarie. In 11L di terra sana, le radici possono occupare l'80% del volume in 4 settimane.
+
+**Segnali di radici sane:**
+- Bianche e carnose
+- Odore di terra fresca
+- Crescita esplosiva in veg
+
+**Segnali di radici soffocate:**
+- Crescita bloccata
+- Foglie arricciate verso il basso
+- Terra che non asciuga mai
+
+### Stelo e Nodi
+Lo stelo contiene il xilema (trasporta acqua e nutrienti dal basso verso l'alto) e il floema (trasporta zuccheri dalle foglie verso il resto della pianta).
+
+Ogni nodo è un punto di crescita potenziale. Tra nodo e nodo c'è l'internodo. **Internodi corti = luce intensa. Internodi lunghi = luce scarsa.**
+
+### Foglie
+- **Cotiledoni:** prime 2 foglie tonde, contengono nutrienti iniziali
+- **Foglie palmate:** 3-9 dita, principali fabbriche di zucchero
+- **Sugar leaves:** piccole foglie tra i fiori, ricche di tricomi
+
+## Fotosintesi e Luce
+
+La cannabis usa la **fotosintesi C3** — fissa CO2 direttamente durante il giorno. Il processo richiede:
+
+- **Fotoni** (luce) per attivare la clorofilla
+- **CO2** per costruire zuccheri
+- **Acqua** per idrolisi
+- **Nutrienti** per enzimi e strutture
+
+### Spettro Luminoso
+
+| Colore | Lunghezza | Effetto |
+|--------|-----------|---------|
+| Blu (400-500nm) | Veg | Compatto stelo, foglie dense |
+| Rosso (600-700nm) | Bloom | Fioritura, allungamento internodi |
+| UV-B | Finale | Stimola produzione tricomi |
+
+## Tricomi: Le Fabbriche di Resina
+
+I tricomi sono ghiandole epidermiche che producono:
+
+- **THC** — effetto psicoattivo
+- **CBD** — effetto rilassante non psicoattivo
+- **Terpeni** — aroma e effetto entourage
+- **Flavonoidi** — colore e antiossidanti
+
+**3 tipi di tricomi:**
+1. **Bulbosi** — piccoli, inutili (10-15 micron)
+2. **Capitati sessili** — medi, pochi cannabinoidi (25-50 micron)
+3. **Capitati peduncolati** — grandi, ricchi di resina (50-100 micron)
+
+## Ciclo di Vita
+
+La cannabis è una pianta **annuale** con ciclo determinato:
+1. **Germinazione** — attivazione ormoni
+2. **Seedling** — sviluppo radici e prime foglie
+3. **Vegetativa** — accumulo biomassa
+4. **Fioritura** — riproduzione (femmina = cime, maschio = polline)
+5. **Senescenza** — degradazione, pronta per raccolta`
+    },
+    {
+        id: 3,
+        title: "Tipologie: Indica, Sativa, Hybrid, Auto",
+        category: "varietà",
+        icon: "🧬",
+        color: "#bf00ff",
+        desc: "Differenze genetiche, effetti e caratteristiche di crescita.",
+        evidence: "community",
+        meta: {
+            author: "GROW 420 Team",
+            revised: "2024-08-09",
+            sources: [
+                {label: "Grow Weed Easy", url: "https://www.growweedeasy.com"},
+                {label: "Royal Queen Seeds", url: "https://www.royalqueenseeds.com"}
+            ]
+        },
+        content: `# Tipologie di Cannabis
+
+## Indica
+
+**Origine:** Afghanistan, Pakistan, India (zone montuose)
+
+**Caratteristiche:**
+- Pianta bassa e compatta (60-120cm)
+- Foglie larghe e scure
+- Fioritura corta (6-9 settimane)
+- Cime dense e pesanti
+- Resa media-alta
+
+**Effetti:** Relax fisico, sedazione, "body high". Ideale per sera e dolore cronico.
+
+**Varietà famose:** Northern Lights, OG Kush, Granddaddy Purple
+
+## Sativa
+
+**Origine:** Thailandia, Colombia, Africa equatoriale
+
+**Caratteristiche:**
+- Pianta alta e slanciata (150-300cm+)
+- Foglie sottili e chiare
+- Fioritura lunga (10-14 settimane)
+- Cime allungate e ariose
+- Resa alta ma tempo lungo
+
+**Effetti:** Energia, creatività, euforia cerebrale. Ideale per giorno e depressione.
+
+**Varietà famose:** Haze, Durban Poison, Thai
+
+## Hybrid
+
+La maggior parte delle varietà moderne sono hybrid — incroci selezionati per combinare i tratti migliori.
+
+**Hybrid Indica-dominante:** 70% Indica / 30% Sativa
+- Effetto bilanciato con relax prevalente
+- Crescita media
+- Esempio: Blue Dream, Girl Scout Cookies
+
+**Hybrid Sativa-dominante:** 70% Sativa / 30% Indica
+- Energia con leggero relax
+- Crescita alta
+- Esempio: Amnesia Haze, Super Lemon Haze
+
+**Hybrid 50/50:** Equilibrio perfetto
+- Esempio: White Widow, AK-47
+
+## Autofiorenti (Ruderalis)
+
+**Origine:** Siberia, Russia (climi estremi)
+
+**Caratteristiche uniche:**
+- Ciclo fisso: 8-12 settimane dalla germinazione
+- **Non dipende dalla luce** per fiorire
+- Piccole e compatte (30-100cm)
+- Resa più bassa ma velocissima
+- Resistenti a freddo e muffa
+
+**Quando usarle:**
+- Prima volta che coltivi
+- Spazio limitato
+- Clima freddo
+- Vuoi raccolte rapide
+
+**Svantaggi:**
+- Non tollerano errori (tempo fisso)
+- Non recuperano da topping/LST aggressivo
+- Meno potenti in THC (ma migliorano ogni anno)
+
+## Come scegliere
+
+| Fattore | Consiglio |
+|---------|-----------|
+| Spazio | Auto o Indica per piccolo, Sativa per grande |
+| Tempo | Auto per veloce, Foto per qualità |
+| Esperienza | Auto o Hybrid facili per iniziare |
+| Effetto | Indica per relax, Sativa per energia |`
+    },
+    {
+        id: 4,
+        title: "Cannabinoidi e Terpeni",
+        category: "scienza",
+        icon: "🧪",
+        color: "#ff6600",
+        desc: "Guida completa ai composti attivi e all'effetto entourage.",
+        evidence: "study",
+        meta: {
+            author: "GROW 420 Team",
+            revised: "2024-08-09",
+            sources: [
+                {label: "Grow Weed Easy", url: "https://www.growweedeasy.com"},
+                {label: "Royal Queen Seeds", url: "https://www.royalqueenseeds.com"}
+            ]
+        },
+        content: `# Cannabinoidi e Terpeni
+
+## I Principali Cannabinoidi
+
+### THC (Tetraidrocannabinolo)
+- **Effetto:** Psicoattivo, euforia, aumento appetito
+- **Benefici:** Dolore, nausea, depressione
+- **Effetti collaterali:** Ansia, tachicardia, secchezza bocca
+- **Range comune:** 15-30%
+
+### CBD (Cannabidiolo)
+- **Effetto:** Non psicoattivo, rilassante, antinfiammatorio
+- **Benefici:** Ansia, epilessia, infiammazione, dolore
+- **Range comune:** 0.1-20%
+
+### CBN (Cannabinolo)
+- **Formazione:** Degradazione THC (esposizione luce/ossigeno)
+- **Effetto:** Sedativo, sonnolenza
+- **Presente in:** Cannabis vecchia o mal conservata
+
+### CBG (Cannabigerolo)
+- **Precursore:** Da CBG si formano THC, CBD, CBC
+- **Effetto:** Antibatterico, neuroprotettivo
+- **Raro:** <1% nella maggior parte delle varietà
+
+## Gli 8 Terpeni Principali
+
+I terpeni sono composti aromatici che determinano sapore, odore e **modulano l'effetto** dei cannabinoidi (effetto entourage).
+
+### Myrcene
+- **Aroma:** Terra, mango, muschio
+- **Effetto:** Sedativo, rilassante muscolare
+- **Presente in:** OG Kush, Blue Dream
+
+### Limonene
+- **Aroma:** Limone, agrumi
+- **Effetto:** Energizzante, antidepressivo
+- **Presente in:** Super Lemon Haze, Durban Poison
+
+### Pinene
+- **Aroma:** Pino, bosco
+- **Effetto:** Alertness, memoria, antinfiammatorio
+- **Presente in:** Jack Herer, Blue Dream
+
+### Linalool
+- **Aroma:** Lavanda, fiori
+- **Effetto:** Antiansia, sedativo
+- **Presente in:** Amnesia Haze, LA Confidential
+
+### Caryophyllene
+- **Aroma:** Pepe, spezie
+- **Effetto:** Antinfiammatorio, analgesico
+- **Unico:** Interagisce con recettori CB2 (come un cannabinoide)
+- **Presente in:** Girl Scout Cookies, OG Kush
+
+### Terpinolene
+- **Aroma:** Pino, fiori, erbe
+- **Effetto:** Uplifting, antibatterico
+- **Presente in:** Jack Herer, Golden Pineapple
+
+### Humulene
+- **Aroma:** Luppolo, terra
+- **Effetto:** Sopprime appetito, antinfiammatorio
+- **Presente in:** White Widow, Headband
+
+### Ocimene
+- **Aroma:** Basilico, mango, fiori
+- **Effetto:** Antifungino, decongestionante
+- **Presente in:** Strawberry Cough, Golden Goat
+
+## Effetto Entourage
+
+L'effetto entourage è la **sinergia** tra cannabinoidi e terpeni. Non esiste solo il THC: la combinazione di tutti i composti crea l'esperienza unica di ogni varietà.
+
+**Esempio:** THC + Myrcene = sedazione intensa
+**Esempio:** THC + Limonene + Pinene = high cerebrale e creativo
+
+## Come massimizzare i terpeni
+
+1. **Curing lento** (4+ settimane) — sviluppa profili complessi
+2. **Temperatura notturna bassa** (3-5°C sotto giorno) — stimola produzione
+3. **No overfertilizzazione** — stress chimico riduce terpeni
+4. **Essiccazione lenta** — 10-14 giorni ideale
+5. **Conservazione in vetro** — barattoli ermetici al buio`
+    },
+    {
+        id: 5,
+        title: "Qualità: Curing e Conservazione",
+        category: "post-harvest",
+        icon: "🏆",
+        color: "#c4a35a",
+        desc: "Tecniche avanzate per curing perfetto e conservazione a lungo termine.",
+        evidence: "source",
+        meta: {
+            author: "GROW 420 Team",
+            revised: "2024-08-09",
+            sources: [
+                {label: "Grow Weed Easy", url: "https://www.growweedeasy.com"},
+                {label: "Royal Queen Seeds", url: "https://www.royalqueenseeds.com"}
+            ]
+        },
+        content: `# Qualità: Curing e Conservazione
+
+## Perché il Curing è Fondamentale
+
+Il curing non è solo "essiccare". È un processo **biochimico** dove:
+- Clorofilla si degrada (meno sapore di erba/fieno)
+- Zuccheri si stabilizzano
+- Terpeni maturano e si complessificano
+- THC si converte parzialmente in CBN (effetto più morbido)
+
+**Cannabis ben curata vs mal curata:**
+- Sapore: dolce/terroso vs erboso/amaro
+- Effetto: morbido/lungo vs duro/breve
+- Fumo: liscio vs irritante
+
+## Curing in 4 Fasi
+
+### Fase 1: Essiccazione (Giorni 1-10)
+- Appendi rami a testa in giù
+- Buio totale, 15-20°C, 45-55% umidità
+- Ventilazione indiretta (mai diretta sui fiori)
+- **Test stelo:** si piega = umido, si spezza = pronto
+
+### Fase 2: Jar Burping (Settimane 1-2)
+- Barattoli di vetro riempiti a 3/4
+- Apri 1-2 volte al giorno per 15-30 minuti
+- Umidità target: 58-62%
+- **Odore ammoniacale?** Tieni aperto 2-4h, rischio muffa
+
+### Fase 3: Stabilizzazione (Settimane 3-4)
+- Burping ogni 2-3 giorni
+- Aromi si fissano
+- Consistenza migliora (fiori non troppo secchi/umidi)
+
+### Fase 4: Affinamento (Settimane 5-8+)
+- Burping settimanale
+- Sapori si complessificano enormemente
+- Dopo 8 settimane = qualità superiore
+
+## Conservazione a Lungo Termine
+
+### Barattoli di Vetro
+- Chiusura ermetica (swing-top o screw)
+- Al buio e fresco (18-22°C)
+- Con Boveda pack 62% per umidità stabile
+
+### Da Evitare
+- **Plastica** — carica statica, rovina tricomi
+- **Frigo** — sbalzi termici creano condensa
+- **Congelatore** — tricomi diventano fragili e si rompono
+- **Luce diretta** — degrada THC in CBN
+
+### Shelf Life
+| Metodo | Durata |
+|--------|--------|
+| Barattolo + Boveda | 6-12 mesi |
+| Sottovuoto + buio | 12-24 mesi |
+| Senza controllo umidità | 1-3 mesi |
+
+## Segnali di Cannabis Stale
+
+- Odore di fieno/erba secca (terpeni persi)
+- Fumo duro e irritante
+- Cime polverose al tatto
+- Sapore amaro o metallico
+
+Se trovi muffa: **butta tutto**. Non esiste "rimuovere la muffa visibile" — le tossine restano.`
+
+    }
+    
+,
+    {
+        id: 6,
+        title: "Leggere un COA: Guida per Grower",
+        category: "scienza",
+        icon: "📋",
+        color: "#00ffff",
+        desc: "Come interpretare un Certificate of Analysis: THCA vs THC, LOQ/LOD, RSD, water activity e accreditamento ISO 17025.",
+        evidence: "lab",
+        meta: {
+            author: "GROW 420 Team",
+            revised: "2026-08-12",
+            sources: [
+                {label: "ASTM D8334", url: "https://webstore.ansi.org/standards/astm/astmd8334d8334m20"},
+                {label: "AOAC Cannabis", url: "https://members.aoac.org/AOAC/AOAC/Item_Detail.aspx?iProductCode=QAES_CH05"}
+            ]
+        },
+        content: `# Leggere un COA: Guida per Grower\n\n## THCA vs Δ9-THC\nIl COA riporta spesso **THCA** e **Δ9-THC** separati. Il THC totale si stima con:\n\`THC totale = Δ9-THC + (THCA × 0.877)\`\nIl fattore 0.877 deriva dalla perdita di CO₂ durante la decarbossilazione.\n\n## LOQ vs LOD\n- **LOD** (Limit of Detection): il valore più basso rilevabile dallo strumento. Sotto questo livello il composto è "non rilevato".\n- **LOQ** (Limit of Quantification): il valore più basso **affidabile** per una misurazione quantitativa. Tra LOD e LOQ il dato esiste ma con incertezza alta.\n\n> Se il COA riporta "<LOQ", non significa zero: significa "presente ma sotto la soglia di quantificazione affidabile".\n\n## RSD (Repeatability)\nL'**RSD%** indica la variabilità della misura. Se >5%, il dato è poco affidabile. Un buon laboratorio accreditato ISO 17025 mantiene RSD <3% su cannabinoidi maggiori.\n\n## Water Activity (aw)\n- **aw < 0.65**: sicuro, rischio muffa minimale\n- **aw > 0.70**: pericolo muffa e batteri\n\n## Checklist COA\n- [ ] Laboratorio accreditato ISO 17025?\n- [ ] Metodo analitico dichiarato (HPLC-DAD / GC-FID)?\n- [ ] Data di campionamento e analisi?\n- [ ] LOQ/LOD riportati per ogni analita?\n- [ ] RSD < 5%?\n- [ ] Water activity < 0.65?\n- [ ] Pannello esteso (pesticidi, metalli, micotossine) disponibile?`
+    },
+    {
+        id: 7,
+        title: "Miti e Realtà: Flushing, 48h Buio, Entourage",
+        category: "guida",
+        icon: "🧯",
+        color: "#ff6600",
+        desc: "Flushing, buio pre-raccolta e entourage effect: cosa dice la letteratura e cosa è solo community lore.",
+        evidence: "study",
+        meta: {
+            author: "GROW 420 Team",
+            revised: "2026-08-12",
+            sources: [
+                {label: "S8 — Elevated root-zone P", url: "https://pubmed.ncbi.nlm.nih.gov/40051879/"},
+                {label: "S5 — Entourage Review", url: "https://pubmed.ncbi.nlm.nih.gov/39598452/"},
+                {label: "S6 — Entourage 2026", url: "https://pubmed.ncbi.nlm.nih.gov/42484389/"}
+            ]
+        },
+        content: `# Miti e Realtà\n\n## Flushing\n**Mito:** "Più nutrienti = più resina / più yield."\n**Realtà:** Lo studio S8 (2025) dimostra che elevati livelli di P e nutrienti **non aumentano** yield né cannabinoidi.\n**Pratica tecnica:** Il flushing come *lavaggio finale* per rimuovere eccessi di sali è supportato dall'esperienza tecnica, ma il suo impatto sul sapore finale è **oggetto di dibattito** e non dimostrato clinicamente come universale.\n\n## 48h di buio\n**Mito:** "Due giorni al buio aumentano la resina."\n**Realtà:** **Zero studi peer-reviewed** lo confermano. È un claim esclusivamente *community*.\nLabel nel sito: **⚪ Community only — nessuna evidenza scientifica**.\n\n## Entourage Effect\n**Mito:** "I terpeni potenziano sempre il THC in modo prevedibile."\n**Realtà:** S5/S6 (2024-2026) confermano che l'entourage effect è un'**ipotesi plausibile** con evidenza preclinica, ma **nessun trial RCT definitivo** su umani ne ha stabilito le regole.\nFormulazione corretta: *"potrebbe modulare"* l'effetto, non *"modula"*.\n\n## Indica = Sedativo?\n**Falso.** Il profilo chimico (chemotype + terpeni) conta, non il nome vernacolare. Una "Indica" può avere profilo terpenico energizzante e viceversa.`
+    },
+    {
+        id: 8,
+        title: "Coltivazione Type III (CBD-Rich): Guida Legale e Tecnica",
+        category: "varietà",
+        icon: "⚖️",
+        color: "#bf00ff",
+        desc: "Legge italiana THC<0.5%, strain Type III consigliate, rischi hermaphroditism e test di campo.",
+        evidence: "source",
+        meta: {
+            author: "GROW 420 Team",
+            revised: "2026-08-12",
+            sources: [
+                {label: "D.Lgs. 242/2016", url: "https://www.normattiva.it/uri-res/N2Ls?urn:nir:stato:decreto.legislativo:2016-12-09;242"},
+                {label: "Circolare Min. Salute 2019", url: "https://www.salute.gov.it"}
+            ]
+        },
+        content: `# Coltivazione Type III (CBD-Rich)\n\n## Cosa è il Type III\n- **Type I**: THC-dominante (>5:1 THC:CBD)\n- **Type II**: Bilanciato (~1:1)\n- **Type III**: CBD-dominante (>5:1 CBD:THC) — comunemente chiamata *cannabis light*\n\n## Quadro Legale Italia 2024-2026\n- **D.Lgs. 242/2016**: consente la coltivazione di canapa sativa con THC < 0.6% in campo (limite coltivazione).\n- **Circolare Ministero della Salute 2019**: il prodotto finito destinato al consumo (fiore, estratto) deve avere **THC < 0.5%**.\n- **EU**: limite generale THC < 0.3% per canapa industriale.\n\n> ⚠️ **Attenzione:** i limiti si riferiscono al **THC totale** (Δ9-THC + THCA × 0.877). Un COA che mostra solo Δ9-THC basso può essere fuorviante se il THCA è alto.\n\n## Strain Type III consigliate\n| Strain | CBD tipico | Note |\n|--------|-----------|------|\n| Charlotte's Web | 15-20% | Storica, stabile |\n| ACDC | 14-20% | Type II/III borderline |\n| Sour Tsunami | 10-15% | Genetica affidabile |\n\n## Test in campo\n- **Kit reattivi**: indicativi, non legalmente vincolanti. Utile per screening pre-raccolta.\n- **Lab accreditato**: unico documento valido per contestazioni.\n\n## Rischio principale: Hermaphroditism\nSemi femminizzati (colloidal silver) hanno tasso hermie **5-15%** vs <1% semi regolari femmina. Se una pianta Type III diventa ermafrodita e impollina una Type I vicina, i fiori della Type I possono **aumentare di THC** nelle vicinanze (sviluppo di semi = stress + potenziale aumento cannabinoidi).`
+    }
+];
+
+let libraryView = 'list';
+let libraryFilter = 'all';
+let libraryEvidenceFilter = null;
+let librarySearch = '';
+let libraryOpenId = null;
+let compareSelection = [];
+let coaData = lsGet('grow-coa', []);
+let communityPosts = lsGet('grow-community', []);
+let iotConnected = lsGet('grow-iot-connected', false);
+let iotSensor = lsGet('grow-iot-sensor', 'custom');
+let cloudSyncStatus = lsGet('grow-cloud-status', 'offline');
+let shopCart = lsGet('grow-shop-cart', []);
+
+function setLibraryFilter(f) { libraryFilter = f; renderPage(); }
+function setLibraryEvidenceFilter(v) { libraryEvidenceFilter = v; renderPage(); }
+function setLibrarySearch(s) { librarySearch = s.toLowerCase(); renderPage(); }
+function openLibraryItem(id) {
+    libraryOpenId = id;
+    libraryView = 'detail';
+    if (currentPage !== 'library') {
+        currentPage = 'library';
+        updateHeader();
+        renderBottomNav();
+    }
+    renderPage();
+}
+function backToLibrary() {
+    libraryView = 'list';
+    libraryOpenId = null;
+    renderPage();
+}
+
+
+function renderReminders(){
+    return `<div>
+<div style="margin-bottom:20px">
+<h1 class="t-graffiti gy" style="font-size:32px;margin-bottom:4px">Promemoria</h1>
+<p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Notifiche e reminder grow</p>
+</div>
+<div class="card gl-y" style="padding:20px;margin-bottom:16px">
+<div style="font-size:11px;color:#555;font-family:Orbitron;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">Nuovo Promemoria</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<input type="text" id="remTitle" class="inp" placeholder="es. Controlla pH del runoff">
+<input type="datetime-local" id="remDate" class="inp">
+<select id="remRepeat" class="inp">
+<option value="once">Una volta</option>
+<option value="daily">Ogni giorno</option>
+<option value="weekly">Ogni settimana</option>
+</select>
+<button onclick="createReminder()" class="btn" style="background:var(--ny);color:#000">➕ Aggiungi Promemoria</button>
+</div>
+</div>
+<div id="reminderList"></div>
+</div>`;
+}
+
+async function createReminder(){
+    const title = document.getElementById('remTitle').value.trim();
+    const datetime = document.getElementById('remDate').value;
+    const repeat = document.getElementById('remRepeat').value;
+    if(!title || !datetime){ alert('Compila tutti i campi'); return; }
+    const ok = await addReminder(title, new Date(datetime).toISOString(), repeat);
+    if(ok){ document.getElementById('remTitle').value=''; document.getElementById('remDate').value=''; renderPage(); }
+}
+
+async function initReminders(){
+    if ('Notification' in window && Notification.permission === 'default') {
+        // richiedi permesso al primo accesso
+        Notification.requestPermission();
+    }
+    if(reminderInterval) clearInterval(reminderInterval);
+    reminderInterval = setInterval(checkReminders, 30000);
+    checkReminders();
+    const list = document.getElementById('reminderList');
+    if(!list) return;
+    const reminders = await db.reminders.reverse().toArray();
+    if(!reminders.length){ list.innerHTML = '<div style="text-align:center;padding:40px;color:#555"><div style="font-size:48px;margin-bottom:12px">⏰</div><div style="font-family:Orbitron;font-size:14px">Nessun promemoria</div></div>'; return; }
+    list.innerHTML = reminders.map(r => {
+        const dt = new Date(r.datetime);
+        const done = !r.active;
+        return `<div class="reminder-card ${done?'done':''}">
+<div class="reminder-time">${dt.toLocaleDateString('it-IT',{day:'2-digit',month:'short'})}<br><span style="font-size:11px">${dt.getHours()}:${String(dt.getMinutes()).padStart(2,'0')}</span></div>
+<div class="reminder-text">${esc(r.title)}<br><span style="font-size:10px;color:#666">${r.repeat==='once'?'Una volta':r.repeat==='daily'?'Giornaliero':'Settimanale'}</span></div>
+<button onclick="toggleReminder(${r.id}, ${done?1:0}).then(()=>renderPage())" style="background:none;border:none;color:${done?'var(--ng)':'#888'};font-size:18px;cursor:pointer">${done?'↩️':'✓'}</button>
+<button onclick="deleteReminder(${r.id}).then(()=>renderPage())" style="background:none;border:none;color:#c44;font-size:18px;cursor:pointer">🗑</button>
+</div>`;
+    }).join('');
+}
+
+function renderLibrary() {
+    if (libraryView === 'detail' && libraryOpenId !== null) {
+        return renderLibraryDetail();
+    }
+    const cats = [
+        { v: 'all', l: 'Tutti', c: '#c4a35a' },
+        { v: 'guida', l: 'Guide', c: '#39ff14' },
+        { v: 'tecnica', l: 'Tecniche', c: '#6db56d' },
+        { v: 'scienza', l: 'Scienza', c: '#00ffff' },
+        { v: 'varietà', l: 'Varietà', c: '#bf00ff' },
+        { v: 'post-harvest', l: 'Post-Harvest', c: '#c4a35a' }
+    ];
+    let filtered = libraryData;
+    if (libraryFilter !== 'all') {
+        filtered = filtered.filter(d => d.category === libraryFilter);
+    }
+    if (libraryEvidenceFilter) {
+        filtered = filtered.filter(d => d.evidence === libraryEvidenceFilter);
+    }
+    if (librarySearch) {
+        filtered = filtered.filter(d =>
+            d.title.toLowerCase().includes(librarySearch) ||
+            d.desc.toLowerCase().includes(librarySearch) ||
+            d.content.toLowerCase().includes(librarySearch)
+        );
+    }
+    let html = `<div>
+<div style="margin-bottom:20px">
+<h1 class="t-graffiti glib" style="font-size:32px;margin-bottom:4px">Libreria</h1>
+<p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Knowledge base grow</p>
+</div>
+<div style="margin-bottom:16px">
+<input type="text" class="inp" placeholder="Cerca nella libreria..." value="${esc(librarySearch)}" oninput="setLibrarySearch(this.value)" style="background:rgba(10,10,10,.5)">
+</div>
+<div style="display:flex;overflow-x:auto;gap:8px;padding-bottom:12px;margin-bottom:12px">
+${cats.map(cat => `<button onclick="setLibraryFilter('${cat.v}')" style="min-width:80px;padding:8px 14px;border-radius:12px;border:2px solid ${libraryFilter === cat.v ? cat.c : '#222'};background:${libraryFilter === cat.v ? cat.c + '20' : '#111'};color:${libraryFilter === cat.v ? cat.c : '#555'};cursor:pointer;font-family:Orbitron;font-size:11px;flex-shrink:0">${cat.l}</button>`).join('')}
+</div>
+<div style="font-size:9px;color:#444;font-family:Orbitron;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Livello di evidenza</div>
+${renderEvidenceFilterBar(libraryEvidenceFilter,'setLibraryEvidenceFilter')}
+<div style="margin-top:16px">`;
+    if (!filtered.length) {
+        html += `<div style="text-align:center;padding:40px 20px;color:#555">
+<div style="font-size:48px;margin-bottom:12px">🔍</div>
+<div style="font-family:Orbitron;font-size:14px">Nessun risultato</div>
+<div style="font-size:12px;margin-top:8px">Prova con altri termini</div>
+</div>`;
+    } else {
+        html += `<div style="display:flex;flex-direction:column;gap:12px">`;
+        filtered.forEach(item => {
+            html += `<div class="card gl-lib" style="padding:16px;cursor:pointer;border:1px solid rgba(196,163,90,.2);background:rgba(17,17,17,.55)" onclick="openLibraryItem(${item.id})">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+<span style="font-size:32px">${item.icon}</span>
+<div style="flex:1">
+<div style="font-weight:700;font-size:16px;font-family:Orbitron;color:${item.color}">${esc(item.title)}</div>
+<div style="font-size:11px;color:#888;margin-top:2px;text-transform:uppercase;letter-spacing:1px;font-family:Orbitron">${item.category}</div>
+</div>
+</div>
+<div style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:10px">${esc(item.desc)}</div>
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+<div style="display:flex;gap:6px;flex-wrap:wrap">
+<span class="badge" style="background:${item.color}15;color:${item.color};border:1px solid ${item.color}40;font-size:10px">${item.icon} ${item.category}</span>
+${item.evidence ? renderEvidenceBadge(item.evidence, {compact:true}) : ''}
+</div>
+<span style="font-size:11px;color:#666;font-family:Orbitron">Leggi →</span>
+</div>
+</div>`;
+        });
+        html += `</div>`;
+    }
+    html += `</div></div>`;
+    return html;
+}
+
+function renderLibraryDetail() {
+    const item = libraryData.find(d => d.id === libraryOpenId);
+    if (!item) {
+        backToLibrary();
+        return '';
+    }
+    return `<div>
+<div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+<button onclick="backToLibrary()" style="background:none;border:none;color:#888;font-size:14px;cursor:pointer;font-family:Orbitron">← INDIETRO</button>
+<span class="badge" style="background:${item.color}15;color:${item.color};border:1px solid ${item.color}40">${item.icon} ${item.category}</span>
+</div>
+<div class="card gl-lib" style="padding:24px;background:rgba(17,17,17,.55);border:1px solid rgba(196,163,90,.25)">
+<div style="text-align:center;margin-bottom:20px">
+<span style="font-size:48px">${item.icon}</span>
+<h1 class="t-graffiti" style="font-size:28px;color:${item.color};margin:12px 0 4px">${esc(item.title)}</h1>
+<div style="font-size:12px;color:#888;margin-bottom:10px">${esc(item.desc)}</div>
+${item.evidence ? `<div style="display:flex;justify-content:center">${renderEvidenceBadge(item.evidence)}</div>` : ''}
+</div>
+<div style="border-top:1px solid #222;padding-top:20px">
+${parseGlossary(mdToHtml(item.content))}
+</div>
+${item.meta ? `<div class="versioning-bar">
+<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+<span>✍️ <strong>Autore:</strong> ${esc(item.meta.author)}</span>
+<span>🔄 <strong>Revisione:</strong> ${esc(item.meta.revised)}</span>
+</div>
+<div style="margin-top:8px">📚 <strong>Fonti:</strong> ${(item.meta.sources || []).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.label)}</a>`).join(' • ')}</div>
+</div>` : ''}
+${renderVersionHistory(item)}
+</div>
+</div>`;
+}
+
+function initLibrary() {}
+
+// ═══════════════════════════════════════════════════════════
+// FASE 2 — DASHBOARD PERSONALE
+// ═══════════════════════════════════════════════════════════
+
+function renderDashboard(){
+    const plants = lsGet('grow-plants',[]);
+    if(!plants.length){
+        return `<div>
+<div style="margin-bottom:20px">
+<h1 class="t-graffiti gn" style="font-size:32px;margin-bottom:4px">Dashboard</h1>
+<p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Panoramica del tuo grow</p>
+</div>
+<div style="text-align:center;padding:60px 20px">
+<div style="font-size:64px;margin-bottom:16px">📊</div>
+<div style="font-family:Orbitron;font-size:16px;color:#666;margin-bottom:8px">Nessuna pianta da analizzare</div>
+<div style="font-size:13px;color:#444;margin-bottom:24px">Aggiungi piante nel Journal per vedere le statistiche</div>
+<button onclick="go('journal');newPlant()" class="btn" style="background:var(--np);color:#fff">Aggiungi Pianta</button>
+</div>
+</div>`;
+    }
+
+    // Calcoli aggregati
+    const totalPlants = plants.length;
+    const totalProblems = plants.reduce((sum, p) => sum + (p.logs || []).filter(l => l.isProblem).length, 0);
+    const totalLogs = plants.reduce((sum, p) => sum + (p.logs || []).length, 0);
+
+    // Resa totale stimata vs reale
+    let totalFresh = 0, totalDry = 0;
+    plants.forEach(p => {
+        (p.logs || []).forEach(l => {
+            if(l.metrics?.fresh) totalFresh += parseFloat(l.metrics.fresh);
+            if(l.metrics?.dry) totalDry += parseFloat(l.metrics.dry);
+        });
+    });
+    const yieldPct = totalFresh > 0 ? ((totalDry / totalFresh) * 100).toFixed(1) : 0;
+
+    // Durata media fase
+    const avgPhase = totalPlants > 0 ? (plants.reduce((s, p) => s + (p.phase || 0), 0) / totalPlants).toFixed(1) : 0;
+
+    let html = `<div>
+<div style="margin-bottom:20px">
+<h1 class="t-graffiti gn" style="font-size:32px;margin-bottom:4px">Dashboard</h1>
+<p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Panoramica del tuo grow</p>
+</div>
+<div class="dashboard-grid">
+<div class="dash-card gl-g">
+<div class="dash-label">Piante Totali</div>
+<div class="dash-value gn" style="color:var(--ng)">${totalPlants}</div>
+<div class="dash-sub">${plants.filter(p=>p.phase>=5).length} in fioritura/harvest</div>
+</div>
+<div class="dash-card gl-o">
+<div class="dash-label">Problemi Rilevati</div>
+<div class="dash-value go" style="color:var(--no)">${totalProblems}</div>
+<div class="dash-sub">${totalLogs > 0 ? ((totalProblems/totalLogs)*100).toFixed(1) : 0}% dei log</div>
+</div>
+<div class="dash-card gl-c">
+<div class="dash-label">Resa Totale</div>
+<div class="dash-value gc" style="color:var(--nc)">${totalDry > 0 ? totalDry.toFixed(1) : '0'}g</div>
+<div class="dash-sub">${totalFresh > 0 ? 'da ' + totalFresh.toFixed(1) + 'g freschi' : 'Nessun dato peso'}</div>
+${totalFresh > 0 ? `<div class="dash-bar"><div class="dash-bar-fill" style="width:${Math.min(yieldPct,100)}%;background:var(--nc)"></div></div><div style="font-size:10px;color:#555;margin-top:4px;font-family:Orbitron">${yieldPct}% resa</div>` : ''}
+</div>
+<div class="dash-card gl-p">
+<div class="dash-label">Fase Media</div>
+<div class="dash-value gp" style="color:var(--np)">${phases[Math.floor(avgPhase)]?.name || 'Setup'}</div>
+<div class="dash-sub">Giorno medio: ${Math.round(plants.reduce((s,p)=>s+calcPlantDay(p),0)/totalPlants)}</div>
+</div>
+</div>
+
+<div class="card" style="padding:20px;margin-top:16px">
+<div style="font-size:11px;color:#555;font-family:Orbitron;margin-bottom:16px;text-transform:uppercase;letter-spacing:2px">📊 Confronto Piante</div>
+<div style="display:flex;flex-direction:column;gap:12px">`;
+
+    plants.forEach((pl, idx) => {
+        const phase = phases[pl.phase] || phases[0];
+        const plogs = pl.logs || [];
+        const pProblems = plogs.filter(l => l.isProblem).length;
+        const pFresh = plogs.reduce((s, l) => s + (parseFloat(l.metrics?.fresh) || 0), 0);
+        const pDry = plogs.reduce((s, l) => s + (parseFloat(l.metrics?.dry) || 0), 0);
+        const pYield = pFresh > 0 ? ((pDry / pFresh) * 100).toFixed(1) : 0;
+
+        html += `<div class="card" style="padding:14px;background:rgba(17,17,17,.55);border:1px solid rgba(34,34,34,.6)">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+<div style="font-weight:700;font-size:14px;font-family:Orbitron">${esc(pl.name)}</div>
+<span class="badge" style="background:${phase.color}20;color:${phase.color};border:1px solid ${phase.color}50;font-size:10px">${phase.name}</span>
+</div>
+<div class="dash-compare">
+<div class="dash-compare-item">
+<div class="dash-compare-val" style="color:var(--ng)">${calcPlantDay(pl)}</div>
+<div class="dash-compare-lab">Giorno</div>
+</div>
+<div class="dash-compare-item">
+<div class="dash-compare-val" style="color:var(--no)">${pProblems}</div>
+<div class="dash-compare-lab">Problemi</div>
+</div>
+<div class="dash-compare-item">
+<div class="dash-compare-val" style="color:var(--nc)">${plogs.length}</div>
+<div class="dash-compare-lab">Log</div>
+</div>
+<div class="dash-compare-item">
+<div class="dash-compare-val" style="color:var(--np)">${pDry > 0 ? pDry.toFixed(1) + 'g' : '-'}</div>
+<div class="dash-compare-lab">Resa</div>
+</div>
+</div>
+${pYield > 0 ? `<div class="dash-bar" style="margin-top:10px"><div class="dash-bar-fill" style="width:${Math.min(pYield,100)}%;background:var(--nc)"></div></div><div style="font-size:9px;color:#555;margin-top:4px;font-family:Orbitron;text-align:right">${pYield}% resa</div>` : ''}
+</div>`;
+    });
+
+    html += `</div></div>`;
+
+    // Ultimi problemi
+    const allProblems = [];
+    plants.forEach((p, idx) => {
+        (p.logs || []).forEach(l => {
+            if(l.isProblem) allProblems.push({...l, plantName: p.name, plantIdx: idx});
+        });
+    });
+    allProblems.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    if(allProblems.length){
+        html += `<div class="card" style="padding:20px;margin-top:16px">
+<div style="font-size:11px;color:#555;font-family:Orbitron;margin-bottom:16px;text-transform:uppercase;letter-spacing:2px">⚠️ Ultimi Problemi</div>
+<div class="dash-problem-list">`;
+        allProblems.slice(0, 5).forEach(prob => {
+            html += `<div class="dash-problem-item" onclick="journalEditId=${prob.plantIdx};journalView='detail';go('journal')" style="cursor:pointer">
+<div class="dash-problem-date">${prob.date.split(',')[0]}</div>
+<div class="dash-problem-text"><strong style="color:#fff">${esc(prob.plantName)}:</strong> ${esc(prob.text.substring(0, 60))}${prob.text.length > 60 ? '...' : ''}</div>
+<span style="font-size:11px;color:var(--no)">→</span>
+</div>`;
+        });
+        html += `</div></div>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
+function initDashboard(){}
+
+
+function parseMetricValue(v){
+    if(v===undefined||v===null)return null;
+    const n=parseFloat(String(v).replace(/[^0-9.\-]/g,''));
+    return isNaN(n)?null:n;
+}
+let growChart=null;
+let growBarChart=null;
+function initCharts(){
+    if(typeof Chart==='undefined'){
+        const c=document.getElementById('chartContainer');
+        if(c)c.innerHTML='<div style="text-align:center;color:#555;padding:20px;font-size:12px">📊 Chart.js non caricato.<br>Connettiti a internet per vedere i grafici.</div>';
+        return;
+    }
+    updateChart();
+    updateBarChart();
+    renderDataTable();
+}
+function updateChart(){
+    const canvas=document.getElementById('growChart');
+    if(!canvas)return;
+    const ctx=canvas.getContext('2d');
+    const plants=lsGet('grow-plants',[]);
+    const pl=plants[journalEditId];
+    if(!pl||!pl.logs)return;
+    const showPH=document.getElementById('chart-ph')?.checked??true;
+    const showEC=document.getElementById('chart-ec')?.checked??true;
+    const showTemp=document.getElementById('chart-temp')?.checked??true;
+    const showHum=document.getElementById('chart-hum')?.checked??true;
+    const logs=pl.logs.filter(l=>l.metrics&&(parseMetricValue(l.metrics.ph)!==null||parseMetricValue(l.metrics.ec)!==null||parseMetricValue(l.metrics.temp)!==null||parseMetricValue(l.metrics.humidity)!==null));
+    const labels=logs.map(l=>l.date.split(',')[0]);
+    const datasets=[];
+    const scales={x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#888',font:{family:'Inter',size:10}}}};
+    if(showPH){
+        datasets.push({label:'pH',data:logs.map(l=>parseMetricValue(l.metrics.ph)),borderColor:'var(--nc)',backgroundColor:'rgba(0,255,255,0.08)',yAxisID:'y',tension:0.3,pointRadius:4});
+        scales.y={type:'linear',display:true,position:'left',title:{display:true,text:'pH',color:'var(--nc)'},min:0,max:14,grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#888'}};
+    }
+    if(showEC){
+        datasets.push({label:'EC (mS/cm)',data:logs.map(l=>parseMetricValue(l.metrics.ec)),borderColor:'var(--np)',backgroundColor:'rgba(191,0,255,0.08)',yAxisID:'y1',tension:0.3,pointRadius:4});
+        scales.y1={type:'linear',display:true,position:'right',title:{display:true,text:'EC',color:'var(--np)'},grid:{drawOnChartArea:false},ticks:{color:'#888'}};
+    }
+    if(showTemp){
+        datasets.push({label:'Temp (°C)',data:logs.map(l=>parseMetricValue(l.metrics.temp)),borderColor:'var(--no)',backgroundColor:'rgba(255,102,0,0.08)',yAxisID:'y2',tension:0.3,pointRadius:4});
+        scales.y2={type:'linear',display:true,position:'right',title:{display:true,text:'Temp °C',color:'var(--no)'},grid:{drawOnChartArea:false},ticks:{color:'#888'}};
+    }
+    if(showHum){
+        datasets.push({label:'Umidità (%)',data:logs.map(l=>parseMetricValue(l.metrics.humidity)),borderColor:'var(--ng)',backgroundColor:'rgba(57,255,20,0.08)',yAxisID:'y3',tension:0.3,pointRadius:4});
+        scales.y3={type:'linear',display:true,position:'right',title:{display:true,text:'Umid %',color:'var(--ng)'},grid:{drawOnChartArea:false},ticks:{color:'#888'}};
+    }
+    if(growChart)growChart.destroy();
+    if(datasets.length===0){ctx.clearRect(0,0,canvas.width,canvas.height);return;}
+    growChart=new Chart(ctx,{type:'line',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#aaa',font:{family:'Orbitron',size:11}}},scales}}});
+}
+function updateBarChart(){
+    const canvas=document.getElementById('growBarChart');
+    if(!canvas)return;
+    const ctx=canvas.getContext('2d');
+    const plants=lsGet('grow-plants',[]);
+    const pl=plants[journalEditId];
+    if(!pl||!pl.logs)return;
+    const logs=pl.logs.filter(l=>l.metrics&&(l.metrics.fresh||l.metrics.dry));
+    if(!logs.length){
+        const c=document.getElementById('barChartContainer');
+        if(c)c.innerHTML='<div style="text-align:center;color:#555;padding:20px;font-size:12px">📊 Nessun dato di peso.<br>Inserisci Peso Fresco e Peso Secco nei log.</div>';
+        return;
+    }
+    const labels=logs.map(l=>l.date.split(',')[0]);
+    const freshData=logs.map(l=>parseMetricValue(l.metrics.fresh)||0);
+    const dryData=logs.map(l=>parseMetricValue(l.metrics.dry)||0);
+    if(growBarChart)growBarChart.destroy();
+    growBarChart=new Chart(ctx,{type:'bar',data:{labels,datasets:[
+        {label:'Peso Fresco (g)',data:freshData,backgroundColor:'rgba(0,255,255,0.5)',borderColor:'var(--nc)',borderWidth:1},
+        {label:'Peso Secco (g)',data:dryData,backgroundColor:'rgba(191,0,255,0.5)',borderColor:'var(--np)',borderWidth:1}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#aaa',font:{family:'Orbitron',size:11}}}},scales:{x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#888',font:{family:'Inter',size:10}}},y:{title:{display:true,text:'Grammi',color:'#888'},grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#888'}}}}});
+}
+function renderDataTable(){
+    const tbody=document.getElementById('dataTableBody');
+    if(!tbody)return;
+    const plants=lsGet('grow-plants',[]);
+    const pl=plants[journalEditId];
+    if(!pl||!pl.logs){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#555">Nessun log</td></tr>';return;}
+    const logs=pl.logs.slice().reverse();
+    tbody.innerHTML=logs.map(l=>{
+        const m=l.metrics||{};
+        const fresh=m.fresh||'-'; const dry=m.dry||'-';
+        const yieldPct=(m.fresh&&m.dry)?((m.dry/m.fresh)*100).toFixed(1)+'%':'-';
+        return `<tr><td>${l.date.split(',')[0]}</td><td>${m.ph||'-'}</td><td>${m.ec||'-'}</td><td>${m.temp||'-'}</td><td>${m.humidity||'-'}</td><td>${fresh}</td><td>${dry}</td><td>${yieldPct}</td></tr>`;
+    }).join('');
+}
+function exportChartData(){
+    const plants=lsGet('grow-plants',[]);
+    const pl=plants[journalEditId];
+    if(!pl||!pl.logs){alert('Nessun dato da esportare');return;}
+    const header='Data,pH,EC,Temp,Umidita,PesoFresco_g,PesoSecco_g,Resa_pct\n';
+    const rows=pl.logs.map(l=>{
+        const m=l.metrics||{};
+        const fresh=m.fresh||''; const dry=m.dry||'';
+        const yieldPct=(fresh&&dry)?((dry/fresh)*100).toFixed(1):'';
+        return `"${l.date.split(',')[0]}","${m.ph||''}","${m.ec||''}","${m.temp||''}","${m.humidity||''}","${fresh}","${dry}","${yieldPct}"`;
+    }).join('\n');
+    const blob=new Blob([header+rows],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`grow420-dati-${pl.name}-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);
+}
+function resetPlantProgress(){
+if(!confirm('Cancellare tutti i progressi di questa piantina? Questa azione non può essere annullata.'))return;
+const plants=lsGet('grow-plants',[]);
+const idx=journalEditId!==null?journalEditId:getActivePlantIndex();
+if(plants[idx]){plants[idx].progress={};lsSet('grow-plants',plants);renderPage()}
+}
+function showPlantSelector(){
+const plants=lsGet('grow-plants',[]);
+const activeIndex=getActivePlantIndex();
+let html=`<div id="plantSelectorModal" style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Inter,sans-serif;animation:fadeIn .3s ease">
+<div style="background:rgba(17,17,17,.95);border:1px solid rgba(57,255,20,.3);border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:80vh;overflow-y:auto;box-shadow:0 0 40px rgba(57,255,20,.15)">
+<div style="text-align:center;margin-bottom:20px">
+<div style="font-family:'Orbitron',sans-serif;font-size:18px;color:var(--ng);margin-bottom:4px">🌿 Seleziona Pianta Attiva</div>
+<div style="font-size:12px;color:#666">Clicca una piantina per visualizzarla in Home</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px">`;
+plants.forEach((pl,i)=>{
+const phase=phases[pl.phase]||phases[0];
+const isActive=i===activeIndex;
+html+=`<div onclick="selectPlantFromSelector(${i})" style="padding:14px;border-radius:12px;border:2px solid ${isActive?'var(--ng)':'#222'};background:${isActive?'rgba(57,255,20,.08)':'#111'};cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:12px">
+<span style="font-size:28px">${isActive?'✅':'🌱'}</span>
+<div style="flex:1">
+<div style="font-weight:700;font-size:14px;color:#fff;font-family:Orbitron">${esc(pl.name)}</div>
+<div style="font-size:11px;color:#888">${esc(pl.strain)} • Giorno ${calcPlantDay(pl)} • ${phase.name}</div>
+</div>
+${isActive?'<span style="font-size:11px;color:var(--ng);font-family:Orbitron">ATTIVA</span>':'<span style="font-size:11px;color:#555;font-family:Orbitron">Seleziona →</span>'}
+</div>`;
+});
+html+=`</div>
+<button onclick="closePlantSelector()" style="width:100%;margin-top:16px;padding:12px;border-radius:10px;border:none;background:#222;color:#888;font-family:Orbitron;font-size:12px;cursor:pointer">Chiudi</button>
+</div>
+</div>`;
+const div=document.createElement('div');
+div.innerHTML=html;
+document.body.appendChild(div.firstElementChild);
+}
+function selectPlantFromSelector(idx){
+setActivePlantIndex(idx);
+closePlantSelector();
+if(currentPage!=='home'){go('home')}
+}
+function closePlantSelector(){
+const el=document.getElementById('plantSelectorModal');
+if(el)el.remove();
+}
+
+// ═══════════════════════════════════════════════════════════
+// COMPARATORE CULTIVAR (#12)
+// ═══════════════════════════════════════════════════════════
+function renderCompare(){
+    if(compareSelection.length<2){
+        return `<div><div style="margin-bottom:20px"><h1 class="t-graffiti gn" style="font-size:32px;margin-bottom:4px">Confronta</h1><p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Seleziona 2-3 strain da Strains</p></div><div style="text-align:center;padding:40px;color:#555"><div style="font-size:48px;margin-bottom:12px">⚖️</div><div style="font-family:Orbitron;font-size:14px">Seleziona almeno 2 strain</div></div></div>`;
+    }
+    const selected = compareSelection.map(i=>strains[i]).filter(Boolean);
+    let html=`<div><div style="margin-bottom:20px"><h1 class="t-graffiti gn" style="font-size:32px;margin-bottom:4px">Confronta</h1><p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">${selected.length} cultivar selezionate</p></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;font-family:Inter"><thead><tr style="border-bottom:2px solid #333"><th style="text-align:left;padding:10px;color:#888;font-family:Orbitron;font-size:10px;text-transform:uppercase">Parametro</th>${selected.map(s=>`<th style="text-align:center;padding:10px;color:${s.evidence==='lab'?'var(--ng)':s.evidence==='study'?'var(--ny)':'#aaa'};font-family:Orbitron;font-size:11px">${esc(s.name)}</th>`).join('')}</tr></thead><tbody>`;
+    const rows=[
+        {label:'Tipo',key:'type'},
+        {label:'Chemotype',key:'chemotype',fmt:v=>chemotypeInfo[v]?.short||v},
+        {label:'THC',key:'thc'},
+        {label:'CBD',key:'cbd'},
+        {label:'Fioritura',key:'flowerTime'},
+        {label:'Resa',key:'yield'},
+        {label:'Difficoltà',key:'difficulty'},
+        {label:'Genetica',key:'genetics'},
+        {label:'Terpeni',key:'terpenes',fmt:v=>(v||[]).join(', ')}
+    ];
+    rows.forEach((r,i)=>{
+        html+=`<tr style="border-bottom:1px solid ${i%2===0?'#1a1a1a':'#111'}"><td style="padding:10px;color:#666;font-family:Orbitron;font-size:10px;text-transform:uppercase">${r.label}</td>${selected.map(s=>`<td style="padding:10px;text-align:center;color:#ccc">${esc(r.fmt?r.fmt(s[r.key]):s[r.key]||'-')}</td>`).join('')}</tr>`;
+    });
+    html+=`</tbody></table></div><div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">${selected.map((s,i)=>`<button onclick="openStrainCompare(${compareSelection[i]})" class="btn" style="background:#1a1a1a;color:#888;border:1px solid #333;font-size:10px;padding:8px 12px">❌ Rimuovi ${esc(s.name)}</button>`).join('')}<button onclick="compareSelection=[];renderPage();" class="btn" style="background:#1a0505;color:#c44;border:1px solid #331111;font-size:10px;padding:8px 12px">🗑 Svuota</button></div></div>`;
+    return html;
+}
+function initCompare(){}
+
+// ═══════════════════════════════════════════════════════════
+// COA UPLOADER / VIEWER (#13)
+// ═══════════════════════════════════════════════════════════
+function renderCOA(){
+    const coas = lsGet('grow-coa',[]);
+    let html=`<div><div style="margin-bottom:20px"><h1 class="t-graffiti gc" style="font-size:32px;margin-bottom:4px">COA Viewer</h1><p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Certificate of Analysis</p></div>`;
+    html+=`<div class="card gl-c" style="padding:20px;margin-bottom:16px"><div style="font-size:11px;color:#555;font-family:Orbitron;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">Nuovo COA</div><div style="display:flex;flex-direction:column;gap:10px"><input type="text" id="coaStrain" class="inp" placeholder="Strain / Lotto"><input type="text" id="coaLab" class="inp" placeholder="Laboratorio"><input type="date" id="coaDate" class="inp"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input type="number" id="coaThc" class="inp" placeholder="THCA %" step="0.01"><input type="number" id="coaCbd" class="inp" placeholder="CBDA %" step="0.01"></div><input type="text" id="coaTerps" class="inp" placeholder="Terpeni (es. Myrcene 0.45%, Limonene 0.30%)"><input type="file" id="coaFile" accept="image/*,.pdf" style="display:none" onchange="previewCOA(this)"><button onclick="document.getElementById('coaFile').click()" class="btn" style="background:#1a1a1a;color:var(--nc);border:1px solid #333;font-size:11px">📎 Allega PDF/Immagine</button><div id="coaPreview" style="max-height:120px;overflow:hidden;border-radius:8px;display:none"><img id="coaPreviewImg" style="width:100%;object-fit:cover"></div><button onclick="saveCOA()" class="btn" style="background:var(--nc);color:#000">💾 Salva COA</button></div></div>`;
+    if(!coas.length){
+        html+=`<div style="text-align:center;padding:40px;color:#555"><div style="font-size:48px;margin-bottom:12px">📋</div><div style="font-family:Orbitron;font-size:14px">Nessun COA caricato</div></div>`;
+    } else {
+        html+=`<div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">`;
+        coas.forEach((c,i)=>{
+            const thcTot = c.thca ? (c.thca*0.877).toFixed(2) : '-';
+            html+=`<div class="card gl-c" style="padding:16px;border:1px solid rgba(0,255,255,.2)"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div><div style="font-weight:700;font-size:16px;font-family:Orbitron;color:var(--nc)">${esc(c.strain)}</div><div style="font-size:11px;color:#888">${esc(c.lab)} • ${c.date}</div></div><button onclick="deleteCOA(${i})" style="background:none;border:none;color:#c44;font-size:18px;cursor:pointer">🗑</button></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px"><div style="background:rgba(10,10,10,.5);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#555;font-family:Orbitron">THCA</div><div style="font-size:13px;color:var(--nc);font-weight:700">${c.thca||'-'}%</div></div><div style="background:rgba(10,10,10,.5);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#555;font-family:Orbitron">THC tot</div><div style="font-size:13px;color:var(--nc);font-weight:700">${thcTot}%</div></div><div style="background:rgba(10,10,10,.5);border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#555;font-family:Orbitron">CBDA</div><div style="font-size:13px;color:var(--nc);font-weight:700">${c.cbda||'-'}%</div></div></div>${c.terps?`<div style="font-size:11px;color:#aaa;margin-bottom:8px">🌸 ${esc(c.terps)}</div>`:''}${c.file?`<img src="${c.file}" style="width:100%;border-radius:8px;border:1px solid #222">`:''}</div>`;
+        });
+        html+=`</div>`;
+    }
+    html+=`</div>`;
+    return html;
+}
+function previewCOA(input){
+    const file=input.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+        const img=document.getElementById('coaPreviewImg');
+        img.src=e.target.result;
+        document.getElementById('coaPreview').style.display='block';
+        img.dataset.base64=e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+function saveCOA(){
+    const strain=document.getElementById('coaStrain').value.trim();
+    const lab=document.getElementById('coaLab').value.trim();
+    const date=document.getElementById('coaDate').value;
+    const thca=parseFloat(document.getElementById('coaThc').value)||null;
+    const cbda=parseFloat(document.getElementById('coaCbd').value)||null;
+    const terps=document.getElementById('coaTerps').value.trim();
+    const img=document.getElementById('coaPreviewImg');
+    const file=img&&img.dataset.base64?img.dataset.base64:null;
+    if(!strain||!lab){alert('Inserisci strain e laboratorio');return;}
+    const coas=lsGet('grow-coa',[]);
+    coas.unshift({strain,lab,date,thca,cbda,terps,file,createdAt:new Date().toISOString()});
+    lsSet('grow-coa',coas);
+    renderPage();
+}
+function deleteCOA(i){
+    if(!confirm('Eliminare questo COA?'))return;
+    const coas=lsGet('grow-coa',[]);
+    coas.splice(i,1);lsSet('grow-coa',coas);renderPage();
+}
+function initCOA(){}
+
+// ═══════════════════════════════════════════════════════════
+// COMMUNITY Q&A (#14)
+// ═══════════════════════════════════════════════════════════
+function renderCommunity(){
+    const posts=lsGet('grow-community',[]);
+    let html=`<div><div style="margin-bottom:20px"><h1 class="t-graffiti gy" style="font-size:32px;margin-bottom:4px">Community</h1><p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Q&A Grower — Reputazione & Badge</p></div>`;
+    html+=`<div class="card gl-y" style="padding:20px;margin-bottom:16px"><div style="font-size:11px;color:#555;font-family:Orbitron;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">Nuova Domanda</div><div style="display:flex;flex-direction:column;gap:10px"><input type="text" id="commTitle" class="inp" placeholder="Titolo domanda..."><textarea id="commBody" class="inp" rows="3" placeholder="Descrivi il problema o la curiosità..."></textarea><input type="text" id="commTags" class="inp" placeholder="Tag (es. LST, flush, autofiorente)"><button onclick="addCommunityPost()" class="btn" style="background:var(--ny);color:#000">📢 Pubblica</button></div></div>`;
+    if(!posts.length){
+        html+=`<div style="text-align:center;padding:40px;color:#555"><div style="font-size:48px;margin-bottom:12px">💬</div><div style="font-family:Orbitron;font-size:14px">Nessuna domanda ancora</div><div style="font-size:12px;margin-top:8px">Sii il primo a chiedere!</div></div>`;
+    } else {
+        html+=`<div style="display:flex;flex-direction:column;gap:12px">`;
+        posts.forEach((p,i)=>{
+            const authorBadge = (p.authorRep||0)>=10?`<span class="badge" style="background:rgba(57,255,20,.15);color:var(--ng);border:1px solid var(--ng);font-size:9px;margin-left:6px">🏅 Grower Certificato</span>`:'';
+            const replies = p.replies||[];
+            html+=`<div class="card" style="padding:16px;background:rgba(17,17,17,.55);border:1px solid rgba(34,34,34,.6)"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div style="font-weight:700;font-size:15px;color:#fff">${esc(p.title)}</div><div style="display:flex;align-items:center;gap:6px"><button onclick="upvotePost(${i})" style="background:none;border:none;color:var(--ng);font-size:16px;cursor:pointer">▲ ${p.upvotes||0}</button></div></div><div style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:10px">${esc(p.body)}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${(p.tags||[]).map(t=>`<span class="log-tag">#${esc(t)}</span>`).join('')}</div><div style="font-size:10px;color:#555;margin-bottom:10px">👤 ${esc(p.author||'Anonimo')}${authorBadge} • ${new Date(p.date).toLocaleDateString('it-IT')}</div>${replies.length?`<div style="border-top:1px solid #1a1a1a;padding-top:10px;display:flex;flex-direction:column;gap:8px">${replies.map((r,ri)=>`<div style="background:rgba(10,10,10,.5);border-radius:8px;padding:10px"><div style="font-size:12px;color:#bbb;line-height:1.5">${esc(r.text)}</div><div style="font-size:10px;color:#555;margin-top:4px">👤 ${esc(r.author||'Anonimo')} • ${new Date(r.date).toLocaleDateString('it-IT')}</div></div>`).join('')}</div>`:''}<div style="margin-top:10px;display:flex;gap:8px"><input type="text" id="reply-${i}" class="inp" placeholder="Rispondi..." style="flex:1;font-size:12px;padding:8px 12px"><button onclick="addReply(${i})" class="btn" style="background:#222;color:#888;font-size:11px;padding:8px 14px">Rispondi</button></div></div>`;
+        });
+        html+=`</div>`;
+    }
+    html+=`</div>`;
+    return html;
+}
+function addCommunityPost(){
+    const title=document.getElementById('commTitle').value.trim();
+    const body=document.getElementById('commBody').value.trim();
+    const tags=document.getElementById('commTags').value.split(',').map(t=>t.trim()).filter(Boolean);
+    if(!title||!body){alert('Compila titolo e descrizione');return;}
+    const posts=lsGet('grow-community',[]);
+    posts.unshift({title,body,tags,author:'Tu',authorRep:(posts.filter(p=>p.author==='Tu').length),upvotes:0,replies:[],date:new Date().toISOString()});
+    lsSet('grow-community',posts);
+    renderPage();
+}
+function addReply(idx){
+    const el=document.getElementById('reply-'+idx);
+    const text=el.value.trim();
+    if(!text)return;
+    const posts=lsGet('grow-community',[]);
+    if(!posts[idx])return;
+    if(!posts[idx].replies)posts[idx].replies=[];
+    posts[idx].replies.push({text,author:'Tu',date:new Date().toISOString()});
+    posts[idx].authorRep=(posts[idx].authorRep||0)+1;
+    lsSet('grow-community',posts);
+    renderPage();
+}
+function upvotePost(idx){
+    const posts=lsGet('grow-community',[]);
+    if(posts[idx]){posts[idx].upvotes=(posts[idx].upvotes||0)+1;lsSet('grow-community',posts);renderPage();}
+}
+function initCommunity(){}
+
+// ═══════════════════════════════════════════════════════════
+// DATABASE ENTITÀ — BREEDER / LAB / FORNITORI (#15)
+// ═══════════════════════════════════════════════════════════
+const entityDB=[
+    {id:0,name:"Royal Queen Seeds",type:"breeder",country:"Paesi Bassi",rating:4.7,coa:true,verified:true,strains:["White Widow","Amnesia Haze","Blue Dream","Critical + 2.0"],desc:"Seed bank olandese con catalogo vasto e stabile. COA disponibili per le linee premium.",url:"https://www.royalqueenseeds.com"},
+    {id:1,name:"Barney's Farm",type:"breeder",country:"Paesi Bassi",rating:4.6,coa:true,verified:true,strains:["Gorilla Zkittlez","Liberty Haze"],desc:"Leggenda di Amsterdam, genetica premiata.",url:"https://www.barneysfarm.com"},
+    {id:2,name:"Leafly",type:"aggregator",country:"USA",rating:4.5,coa:false,verified:true,strains:[],desc:"Database strain più grande al mondo. Non vende semi ma aggrega dati.",url:"https://www.leafly.com"},
+    {id:3,name:"Grow Weed Easy",type:"source",country:"USA",rating:4.4,coa:false,verified:true,strains:[],desc:"Guida gratuita con approccio evidence-based. Fonte tecnica affidabile.",url:"https://www.growweedeasy.com"},
+    {id:4,name:"Cannalysis",type:"lab",country:"USA",rating:4.8,coa:true,verified:true,strains:[],desc:"Laboratorio ISO 17025 specializzato in cannabis. Pannelli completi.",url:"https://www.cannalysis.com"},
+    {id:5,name:"SensorPush",type:"fornitore",country:"USA",rating:4.3,coa:false,verified:true,strains:[],desc:"Sensori wireless temp/umidità per grow room. Integrazione API disponibile.",url:"https://www.sensorpush.com"},
+    {id:6,name:"AC Infinity",type:"fornitore",country:"USA",rating:4.6,coa:false,verified:true,strains:[],desc:"Ventilazione e climatizzazione smart per grow tent.",url:"https://www.acinfinity.com"}
+];
+let entityFilter='all';
+function renderEntities(){
+    let filtered=entityFilter==='all'?entityDB:entityDB.filter(e=>e.type===entityFilter);
+    let html=`<div><div style="margin-bottom:20px"><h1 class="t-graffiti gp" style="font-size:32px;margin-bottom:4px">Entità Verificate</h1><p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Breeder, Lab & Fornitori</p></div>`;
+    html+=`<div style="display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:8px">${[{v:'all',l:'Tutti',c:'#fff'},{v:'breeder',l:'Breeder',c:'var(--ng)'},{v:'lab',l:'Lab',c:'var(--nc)'},{v:'fornitore',l:'Fornitori',c:'var(--ny)'},{v:'aggregator',l:'Aggregator',c:'var(--np)'},{v:'source',l:'Fonti',c:'var(--no)'}].map(f=>`<button onclick="entityFilter='${f.v}';renderPage()" style="padding:8px 16px;border-radius:99px;border:2px solid ${entityFilter===f.v?f.c:'#222'};background:${entityFilter===f.v?f.c+'20':'#111'};color:${entityFilter===f.v?f.c:'#555'};cursor:pointer;font-family:Orbitron;font-size:11px;flex-shrink:0">${f.l}</button>`).join('')}</div>`;
+    html+=`<div style="display:flex;flex-direction:column;gap:12px">`;
+    filtered.forEach(e=>{
+        const typeColor=e.type==='breeder'?'var(--ng)':e.type==='lab'?'var(--nc)':e.type==='fornitore'?'var(--ny)':'var(--np)';
+        html+=`<div class="card" style="padding:16px;background:rgba(17,17,17,.55);border:1px solid rgba(34,34,34,.6)"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><div style="font-weight:700;font-size:16px;font-family:Orbitron">${esc(e.name)}</div><div style="font-size:11px;color:#888">${esc(e.country)} • ⭐ ${e.rating}</div></div><span class="badge" style="background:${typeColor}20;color:${typeColor};border:1px solid ${typeColor}50">${e.type.toUpperCase()}</span></div><div style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:10px">${esc(e.desc)}</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${e.verified?`<span class="badge" style="background:rgba(57,255,20,.1);color:var(--ng);border:1px solid var(--ng)">✅ Verificato</span>`:''}${e.coa?`<span class="badge" style="background:rgba(0,255,255,.1);color:var(--nc);border:1px solid var(--nc)">📋 COA Caricata</span>`:''}</div>${e.strains.length?`<div style="font-size:11px;color:#666">🧬 Varietà: ${e.strains.map(s=>`<span style="color:#aaa">${esc(s)}</span>`).join(', ')}</div>`:''}<div style="margin-top:10px"><a href="${esc(e.url)}" target="_blank" rel="noopener" style="color:var(--nc);font-size:12px;text-decoration:none">🔗 Visita sito →</a></div></div>`;
+    });
+    html+=`</div></div>`;
+    return html;
+}
+function initEntities(){}
+
+// ═══════════════════════════════════════════════════════════
+// IoT SENSORI (#18)
+// ═══════════════════════════════════════════════════════════
+function renderIoT(){
+    const connected=lsGet('grow-iot-connected',false);
+    const sensor=lsGet('grow-iot-sensor','custom');
+    let html=`<div><div style="margin-bottom:20px"><h1 class="t-graffiti gc" style="font-size:32px;margin-bottom:4px">Sensori IoT</h1><p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Integrazione ambientale automatica</p></div>`;
+    html+=`<div class="card gl-c" style="padding:20px;margin-bottom:16px"><div style="font-size:11px;color:#555;font-family:Orbitron;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">Connessione</div><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div style="width:14px;height:14px;border-radius:50%;background:${connected?'var(--ng)':'#555'};box-shadow:0 0 10px ${connected?'var(--ng)':'transparent'}"></div><div style="font-size:14px;color:${connected?'var(--ng)':'#888'}">${connected?'🟢 Connesso':'⚪ Disconnesso'}</div></div><select id="iotSensorType" class="inp" style="margin-bottom:10px"><option value="custom" ${sensor==='custom'?'selected':''}>Custom / Manuale</option><option value="sensorpush" ${sensor==='sensorpush'?'selected':''}>SensorPush</option><option value="xiaomi" ${sensor==='xiaomi'?'selected':''}>Xiaomi Mi Temp</option></select><button onclick="toggleIoT()" class="btn" style="background:${connected?'#1a0505':'var(--ng)'};color:${connected?'#c44':'#000'};border:1px solid ${connected?'#331111':'var(--ng)'};width:100%">${connected?'🔌 Disconnetti':'🔗 Connetti Sensore'}</button></div>`;
+    if(connected){
+        html+=`<div class="card gl-c" style="padding:20px;margin-bottom:16px"><div style="font-size:11px;color:#555;font-family:Orbitron;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">Lettura Manuale / Simulata</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px"><div><div class="metric-label">Temp °C</div><input type="number" id="iotTemp" class="metric-inp" placeholder="24.0" step="0.1"></div><div><div class="metric-label">Umid %</div><input type="number" id="iotHum" class="metric-inp" placeholder="55" step="1"></div><div><div class="metric-label">pH</div><input type="number" id="iotPH" class="metric-inp" placeholder="6.2" step="0.1"></div><div><div class="metric-label">EC</div><input type="number" id="iotEC" class="metric-inp" placeholder="1.4" step="0.1"></div></div><button onclick="addSensorReading()" class="btn" style="background:var(--nc);color:#000;width:100%">📡 Inserisci nel Journal</button><div style="font-size:10px;color:#555;margin-top:8px">I dati verranno aggiunti come log strutturato alla pianta attiva.</div></div>`;
+    }
+    html+=`<div style="text-align:center;padding:20px;color:#444;font-size:11px">L'integrazione reale con SensorPush/Xiaomi richiede backend con API proprietarie.<br>Per ora: lettura manuale o simulata → log automatico.</div></div>`;
+    return html;
+}
+function toggleIoT(){
+    const connected=!lsGet('grow-iot-connected',false);
+    lsSet('grow-iot-connected',connected);
+    if(connected){
+        const sensor=document.getElementById('iotSensorType')?.value||'custom';
+        lsSet('grow-iot-sensor',sensor);
+    }
+    renderPage();
+}
+function addSensorReading(){
+    const plants=lsGet('grow-plants',[]);
+    const idx=getActivePlantIndex();
+    if(!plants[idx]){alert('Nessuna pianta attiva. Aggiungi una pianta nel Journal.');return;}
+    const temp=document.getElementById('iotTemp').value;
+    const hum=document.getElementById('iotHum').value;
+    const ph=document.getElementById('iotPH').value;
+    const ec=document.getElementById('iotEC').value;
+    const metrics={};
+    if(ph)metrics.ph=ph;
+    if(ec)metrics.ec=ec;
+    if(temp)metrics.temp=temp+'°C';
+    if(hum)metrics.humidity=hum+'%';
+    const text=`Lettura sensore ${lsGet('grow-iot-sensor','custom')}: ${temp?'Temp '+temp+'°C ':''}${hum?'Umid '+hum+'% ':''}${ph?'pH '+ph+' ':''}${ec?'EC '+ec+' ':''}`.trim();
+    if(!plants[idx].logs)plants[idx].logs=[];
+    plants[idx].logs.push({date:new Date().toLocaleString('it-IT'),text,metrics,isProblem:false});
+    lsSet('grow-plants',plants);
+    alert('Dati inseriti nel journal!');
+    go('journal');
+}
+function initIoT(){}
+
+// ═══════════════════════════════════════════════════════════
+// MARKETPLACE / ATTREZZATURA (#19)
+// ═══════════════════════════════════════════════════════════
+const shopItems=[
+    {id:0,name:"LED Spider Farmer SF1000",category:"illuminazione",phase:"veg",price:"€129",popularity:95,evidence:"source",affiliate:"https://www.amazon.it/dp/EXAMPLE",desc:"Quantum board Samsung LM301B. 100W reali. PPFD ottimale per 60x60."},
+    {id:1,name:"Tenda Grow 60x60x140",category:"tenda",phase:"setup",price:"€59",popularity:88,evidence:"community",affiliate:"https://www.amazon.it/dp/EXAMPLE",desc:"Mylar 600D, tubi portacavo, doppia apertura."},
+    {id:2,name:"pH-metro Apera PH20",category:"strumento",phase:"all",price:"€49",popularity:92,evidence:"source",affiliate:"https://www.amazon.it/dp/EXAMPLE",desc:"Precisione ±0.1 pH, ATC, calibrazione automatica."},
+    {id:3,name:"Boveda 62% 8g (10 pack)",category:"accessorio",phase:"curing",price:"€15",popularity:96,evidence:"study",affiliate:"https://www.amazon.it/dp/EXAMPLE",desc:"Umidità a due vie. Essenziale per curing perfetto."},
+    {id:4,name:"Deumidificatore 12L/giorno",category:"clima",phase:"bloom",price:"€89",popularity:78,evidence:"source",affiliate:"https://www.amazon.it/dp/EXAMPLE",desc:"Essenziale in fioritura per tenere umidità sotto il 50%."},
+    {id:5,name:"Lente 60x con LED",category:"strumento",phase:"bloom",price:"€12",popularity:85,evidence:"community",affiliate:"https://www.amazon.it/dp/EXAMPLE",desc:"Per osservare i tricomi e determinare il momento di raccolta."}
+];
+let shopFilter='all';
+function renderShop(){
+    let filtered=shopFilter==='all'?shopItems:shopItems.filter(s=>s.category===shopFilter||s.phase===shopFilter);
+    let html=`<div><div style="margin-bottom:20px"><h1 class="t-graffiti gn" style="font-size:32px;margin-bottom:4px">Attrezzatura</h1><p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Consigli evidence-based per ogni fase</p></div>`;
+    html+=`<div style="display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:8px">${[{v:'all',l:'Tutti',c:'#fff'},{v:'setup',l:'Setup',c:'var(--ng)'},{v:'veg',l:'Veg',c:'var(--np)'},{v:'bloom',l:'Bloom',c:'var(--no)'},{v:'curing',l:'Curing',c:'var(--ny)'}].map(f=>`<button onclick="shopFilter='${f.v}';renderPage()" style="padding:8px 16px;border-radius:99px;border:2px solid ${shopFilter===f.v?f.c:'#222'};background:${shopFilter===f.v?f.c+'20':'#111'};color:${shopFilter===f.v?f.c:'#555'};cursor:pointer;font-family:Orbitron;font-size:11px;flex-shrink:0">${f.l}</button>`).join('')}</div>`;
+    html+=`<div style="display:flex;flex-direction:column;gap:12px">`;
+    filtered.forEach(item=>{
+        html+=`<div class="card" style="padding:16px;background:rgba(17,17,17,.55);border:1px solid rgba(34,34,34,.6)"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div style="font-weight:700;font-size:15px;color:#fff">${esc(item.name)}</div><div style="font-family:Orbitron;font-size:14px;color:var(--ng)">${esc(item.price)}</div></div><div style="font-size:11px;color:#888;margin-bottom:8px">${esc(item.category)} • Fase: ${esc(item.phase)} • 🔥 Popolarità: ${item.popularity}%</div><div style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:10px">${esc(item.desc)}</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${renderEvidenceBadge(item.evidence,{compact:true})}<a href="${esc(item.affiliate)}" target="_blank" rel="noopener" class="btn" style="background:var(--ng);color:#000;font-size:10px;padding:8px 14px;text-decoration:none">🛒 Vedi offerta</a></div></div>`;
+    });
+    html+=`</div><div style="text-align:center;padding:20px;color:#444;font-size:11px;margin-top:12px">I link sono esempi dimostrativi. In produzione sostituire con affiliate reali.</div></div>`;
+    return html;
+}
+function initShop(){}
+
+// ═══════════════════════════════════════════════════════════
+// CLOUD SYNC (#17) — Supabase standby → attivo
+// ═══════════════════════════════════════════════════════════
+async function syncToCloud(){
+    if(!supabaseClient){alert('Supabase non disponibile');return;}
+    try{
+        const userId = lsGet('grow-user-id', null) || 'anon_'+Math.random().toString(36).slice(2,10);
+        lsSet('grow-user-id', userId);
+        const payload = {
+            user_id: userId,
+            plants: lsGet('grow-plants',[]),
+            coa: lsGet('grow-coa',[]),
+            community: lsGet('grow-community',[]),
+            settings: {stoner: lsGet('stoner-mode',false), activePlant: getActivePlantIndex()},
+            updated_at: new Date().toISOString()
+        };
+        const {error} = await supabaseClient.from('grow_sync').upsert(payload, {onConflict: 'user_id'});
+        if(error){console.error(error);alert('Errore sync: '+error.message);}
+        else{lsSet('grow-cloud-status','synced');alert('☁️ Dati sincronizzati su cloud!');renderPage();}
+    }catch(e){alert('Errore: '+e.message);}
+}
+async function syncFromCloud(){
+    if(!supabaseClient){alert('Supabase non disponibile');return;}
+    try{
+        const userId = lsGet('grow-user-id', null);
+        if(!userId){alert('Nessun ID utente. Fai prima un upload.');return;}
+        const {data,error} = await supabaseClient.from('grow_sync').select('*').eq('user_id',userId).single();
+        if(error||!data){alert('Nessun dato remoto trovato');return;}
+        if(!confirm('Sovrascrivere i dati locali con quelli del cloud?'))return;
+        lsSet('grow-plants',data.plants||[]);
+        lsSet('grow-coa',data.coa||[]);
+        lsSet('grow-community',data.community||[]);
+        if(data.settings){lsSet('stoner-mode',data.settings.stoner||false);lsSet('grow-active-plant',data.settings.activePlant||0);}
+        alert('☁️ Dati scaricati dal cloud!');location.reload();
+    }catch(e){alert('Errore: '+e.message);}
+}
+function renderCloudStatus(){
+    const status=lsGet('grow-cloud-status','offline');
+    return `<span style="font-size:10px;color:${status==='synced'?'var(--ng)':'#555'}">☁️ ${status==='synced'?'Sync OK':'Offline'}</span>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// VERSIONING COMPLETO LIBRERIA (#16)
+// ═══════════════════════════════════════════════════════════
+function renderVersionHistory(item){
+    if(!item.versions||!item.versions.length)return '';
+    let html=`<div style="margin-top:20px;border-top:1px solid #222;padding-top:16px"><div style="font-size:11px;color:#555;font-family:Orbitron;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">🕘 Storico Revisioni</div><div style="display:flex;flex-direction:column;gap:8px">`;
+    item.versions.forEach((v,i)=>{
+        const prev=i>0?item.versions[i-1].content:'';
+        const diff=renderSimpleDiff(prev,v.content);
+        html+=`<div class="card" style="padding:12px;background:rgba(10,10,10,.5);border:1px solid #1a1a1a"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:12px;color:#888;font-family:Orbitron">${v.date}</div><div style="font-size:10px;color:#666">${v.author}</div></div><div style="font-size:11px;color:#aaa;line-height:1.6">${diff}</div></div>`;
+    });
+    html+=`</div></div>`;
+    return html;
+}
+function renderSimpleDiff(oldText,newText){
+    if(!oldText)return `<span style="color:var(--ng)">🟢 Prima versione pubblicata</span>`;
+    const oldLines=oldText.split('\n');
+    const newLines=newText.split('\n');
+    let changes=[];
+    newLines.forEach((line,i)=>{
+        if(i>=oldLines.length||line!==oldLines[i]){
+            changes.push(`<div style="color:var(--ny);font-size:10px;border-left:2px solid var(--ny);padding-left:6px;margin:2px 0">+ ${esc(line.substring(0,80))}${line.length>80?'...':''}</div>`);
+        }
+    });
+    if(!changes.length)return `<span style="color:#555">Nessuna modifica visibile (formattazione)</span>`;
+    return changes.slice(0,5).join('')+(changes.length>5?`<div style="color:#666;font-size:10px">...e altre ${changes.length-5} righe</div>`:'');
+}
+
+// Catch globale: se c'è un errore JS mostra qualcosa invece di pagina nera
+window.onerror = function(msg, url, line) {
+    const app = document.getElementById('app');
+    if(app && !app.innerHTML.trim()){
+        app.innerHTML = '<div style="padding:40px;text-align:center;color:#ff4444;font-family:Inter"><h2>⚠️ Errore di avvio</h2><p style="color:#aaa">'+esc(msg)+'<br>Riga: '+line+'</p><p style="color:#666;margin-top:20px">Prova a ricaricare la pagina (Ctrl+F5)<br>Se persiste, controlla la console (F12)</p></div>';
+    }
+};
+
+
+const navItems=[
+{id:'home',label:'Home',icon:'🏠',color:'var(--ng)'},
+{id:'dashboard',label:'Dashboard',icon:'📊',color:'var(--nc)'},
+{id:'guide',label:'Guida',icon:'📖',color:'var(--ng)'},
+{id:'journal',label:'Journal',icon:'📓',color:'var(--np)'},
+{id:'diagnosis',label:'Diagnosi',icon:'🔍',color:'var(--no)'},
+{id:'tools',label:'Tools',icon:'🧮',color:'var(--nc)'},
+{id:'strains',label:'Strains',icon:'🧬',color:'var(--nk)'},
+{id:'compare',label:'Confronta',icon:'⚖️',color:'var(--nc)'},
+{id:'coa',label:'COA',icon:'📋',color:'var(--nc)'},
+{id:'community',label:'Community',icon:'💬',color:'var(--ny)'},
+{id:'entities',label:'Entità',icon:'🏢',color:'var(--np)'},
+{id:'timer',label:'Timer',icon:'⏱️',color:'var(--ny)'},
+{id:'reminders',label:'Promemoria',icon:'⏰',color:'var(--ny)'},
+{id:'iot',label:'Sensori',icon:'📡',color:'var(--nc)'},
+{id:'shop',label:'Attrezzatura',icon:'🛒',color:'var(--ng)'},
+{id:'library',label:'Libreria',icon:'📚',color:'#c4a35a'}
+];
+
+const pageBgs={home:'assets/art1.jpg',guide:'assets/art2.jpg',journal:'assets/art3.jpg',dashboard:'assets/art3.jpg',diagnosis:'assets/art4.jpg',tools:'assets/art5.jpg',strains:'assets/art6.jpg',compare:'assets/art6.jpg',coa:'assets/art4.jpg',community:'assets/art2.jpg',entities:'assets/art5.jpg',timer:'assets/art7.jpg',reminders:'assets/art7.jpg',iot:'assets/art3.jpg',shop:'assets/art5.jpg',library:'assets/bg-library.jpg'};
+
+function lsGet(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch(e){return def}}
+
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+
+function calcPlantDay(pl){
+    const base=parseInt(pl&&pl.day,10)||1;
+    if(!pl||!pl.startDate)return base;
+    const start=new Date(pl.startDate+'T00:00:00');
+    if(isNaN(start.getTime()))return base;
+    const now=new Date();
+    const startMid=new Date(start.getFullYear(),start.getMonth(),start.getDate());
+    const nowMid=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    const elapsed=Math.round((nowMid-startMid)/86400000);
+    return Math.max(1,base+elapsed);
+}
+
+function getActivePlantIndex(){const plants=lsGet('grow-plants',[]);let idx=lsGet('grow-active-plant',0);if(idx>=plants.length)idx=0;return idx}
+
+function setActivePlantIndex(idx){lsSet('grow-active-plant',idx);renderPage()}
+
+function getActivePlantProgress(){const plants=lsGet('grow-plants',[]);const idx=getActivePlantIndex();if(plants[idx]&&plants[idx].progress)return plants[idx].progress;return lsGet('grow-progress',{})}
+
+function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+function parseGlossary(html) {
+    if (!html) return html;
+    if(!glossaryTermsCache){
+        glossaryTermsCache = Object.keys(glossaryDB)
+            .sort((a,b)=>b.length-a.length);
+    }
+    const terms = glossaryTermsCache;
+    let result = html;
+    terms.forEach(term => {
+        const regex = new RegExp(`(?<![\w#])(${term})(?![\w])`, 'gi');
+        result = result.replace(regex, (match) => {
+            const def = glossaryDB[term] || glossaryDB[term.toLowerCase()];
+            if (!def) return match;
+            return `<span class="glossary-term">${match}<span class="glossary-tooltip">${def}</span></span>`;
+        });
+    });
+    return result;
+}
+
+function mdToHtml(md) {
+    if (!md) return '';
+    let html = esc(md);
+    html = html.replace(/```([\s\S]*?)```/g, '<pre style="background:#0a0a0a;border:1px solid #222;border-radius:8px;padding:12px;margin:12px 0;overflow-x:auto;font-family:monospace;font-size:12px;color:#aaa;line-height:1.6">$1</pre>');
+    html = html.replace(/`([^`]+)`/g, '<code style="background:#0a0a0a;border:1px solid #222;border-radius:4px;padding:2px 6px;font-family:monospace;font-size:12px;color:var(--nc)">$1</code>');
+    html = html.replace(/^&gt; (.*$)/gim, '<blockquote style="border-left:3px solid var(--ng);padding-left:12px;margin:12px 0;color:#999;font-style:italic;font-size:13px;line-height:1.6">$1</blockquote>');
+    html = html.replace(/^#### (.*$)/gim, '<h4 style="font-family:Orbitron;font-size:14px;color:var(--ng);margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px">$1</h4>');
+    html = html.replace(/^### (.*$)/gim, '<h3 style="font-family:Orbitron;font-size:16px;color:var(--ng);margin:20px 0 10px;text-transform:uppercase;letter-spacing:1px">$1</h3>');
+    html = html.replace(/^## (.*$)/gim, '<h2 style="font-family:Orbitron;font-size:20px;color:var(--ng);margin:24px 0 12px;text-transform:uppercase;letter-spacing:2px">$1</h2>');
+    html = html.replace(/^# (.*$)/gim, '<h1 style="font-family:\'Permanent Marker\',cursive;font-size:28px;color:var(--ng);margin:28px 0 16px">$1</h1>');
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>');
+    html = html.replace(/\*(.*?)\*/g, '<em style="color:#bbb">$1</em>');
+    html = html.replace(/^---$/gim, '<hr style="border:none;border-top:1px solid #222;margin:20px 0">');
+    const paragraphs = html.split(/\n\s*\n/);
+    html = paragraphs.map(p => {
+        p = p.trim();
+        if (!p) return '';
+        if (p.startsWith('<')) return p;
+        return `<p style="color:#aaa;line-height:1.7;margin:10px 0;font-size:13px">${p}</p>`;
+    }).join('\n');
+    return html;
+}
+
+function renderEvidenceBadge(level,opts){
+    const e=evidenceLevels[level];
+    if(!e)return'';
+    opts=opts||{};
+    const compact=opts.compact;
+    return `<span class="evidence-badge" title="${esc(e.desc)}" style="display:inline-flex;align-items:center;gap:5px;padding:${compact?'3px 8px':'4px 11px'};border-radius:99px;background:${e.color}15;border:1px solid ${e.color}55;color:${e.color};font-family:Orbitron;font-size:${compact?'9px':'10px'};text-transform:uppercase;letter-spacing:.5px;cursor:help;white-space:nowrap">${e.icon} ${compact?e.short:e.label}</span>`;
+}
+
+function renderEvidenceFilterBar(current,onClickFn){
+    const all=`<button onclick="${onClickFn}(null)" style="min-width:60px;padding:8px 14px;border-radius:12px;border:2px solid ${current===null?'#fff':'#222'};background:${current===null?'#ffffff15':'#111'};color:${current===null?'#fff':'#555'};cursor:pointer;font-family:Orbitron;font-size:11px;flex-shrink:0">Tutti</button>`;
+    const btns=Object.keys(evidenceLevels).map(k=>{
+        const e=evidenceLevels[k];
+        return `<button onclick="${onClickFn}('${k}')" style="min-width:70px;padding:8px 14px;border-radius:12px;border:2px solid ${current===k?e.color:'#222'};background:${current===k?e.color+'20':'#111'};color:${current===k?e.color:'#555'};cursor:pointer;font-family:Orbitron;font-size:11px;display:flex;align-items:center;gap:6px;flex-shrink:0">${e.icon} ${e.short}</button>`;
+    }).join('');
+    return `<div style="display:flex;overflow-x:auto;gap:8px;padding-bottom:8px">${all}${btns}</div>`;
+}
+
+function renderJointProgress(pct, size=400){
+    const burn = Math.min(pct * 0.92, 92);
+    const isStoner = lsGet('stoner-mode', false);
+    const src = isStoner ? 'assets/alienjoint.png' : 'assets/joint.png';
+    const jointSize = isStoner ? size * 2 : size;
+    const w = Math.round(jointSize * 0.15);
+    const smoking = pct > 0 && pct < 100;
+    let smokeHtml = '';
+    if(smoking){
+        smokeHtml = `<div class="joint-smoke">
+            <div class="smoke-particle" style="animation-delay:0s"></div>
+            <div class="smoke-particle" style="animation-delay:0.3s"></div>
+            <div class="smoke-particle" style="animation-delay:0.6s"></div>
+        </div>`;
+    }
+    return `<div style="display:inline-flex;align-items:center;justify-content:center;position:relative;width:${jointSize}px;height:${w}px">
+        <div class="joint-wrap" style="height:${jointSize}px;width:${w}px">
+            <img src="${src}" class="joint-img" style="clip-path:inset(${burn}% 0 0 0)">
+        </div>
+        ${smokeHtml}
+    </div>`;
+}
+
+function parseMetricValue(v){
+    if(v===undefined||v===null)return null;
+    const n=parseFloat(String(v).replace(/[^0-9.\-]/g,''));
+    return isNaN(n)?null:n;
+}
+
+function renderCloudStatus(){
+    const status=lsGet('grow-cloud-status','offline');
+    return `<span style="font-size:10px;color:${status==='synced'?'var(--ng)':'#555'}">☁️ ${status==='synced'?'Sync OK':'Offline'}</span>`;
+}
+
+function renderSimpleDiff(oldText,newText){
+    if(!oldText)return `<span style="color:var(--ng)">🟢 Prima versione pubblicata</span>`;
+    const oldLines=oldText.split('\n');
+    const newLines=newText.split('\n');
+    let changes=[];
+    newLines.forEach((line,i)=>{
+        if(i>=oldLines.length||line!==oldLines[i]){
+            changes.push(`<div style="color:var(--ny);font-size:10px;border-left:2px solid var(--ny);padding-left:6px;margin:2px 0">+ ${esc(line.substring(0,80))}${line.length>80?'...':''}</div>`);
+        }
+    });
+    if(!changes.length)return `<span style="color:#555">Nessuna modifica visibile (formattazione)</span>`;
+    return changes.slice(0,5).join('')+(changes.length>5?`<div style="color:#666;font-size:10px">...e altre ${changes.length-5} righe</div>`:'');
+}
+
+function renderVersionHistory(item){
+    if(!item.versions||!item.versions.length)return '';
+    let html=`<div style="margin-top:20px;border-top:1px solid #222;padding-top:16px"><div style="font-size:11px;color:#555;font-family:Orbitron;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">🕘 Storico Revisioni</div><div style="display:flex;flex-direction:column;gap:8px">`;
+    item.versions.forEach((v,i)=>{
+        const prev=i>0?item.versions[i-1].content:'';
+        const diff=renderSimpleDiff(prev,v.content);
+        html+=`<div class="card" style="padding:12px;background:rgba(10,10,10,.5);border:1px solid #1a1a1a"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:12px;color:#888;font-family:Orbitron">${v.date}</div><div style="font-size:10px;color:#666">${v.author}</div></div><div style="font-size:11px;color:#aaa;line-height:1.6">${diff}</div></div>`;
+    });
+    html+=`</div></div>`;
+    return html;
+}
+
+async function addPhoto(plantId, file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = async () => {
+                try {
+                    const MAX_SIZE = 1600;
+                    const scale = Math.min(
+                        1,
+                        MAX_SIZE / Math.max(
+                            img.naturalWidth,
+                            img.naturalHeight
+                        )
+                    );
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(
+                        1,
+                        Math.round(img.naturalWidth * scale)
+                    );
+                    canvas.height = Math.max(
+                        1,
+                        Math.round(img.naturalHeight * scale)
+                    );
+                    const ctx = canvas.getContext(
+                        '2d',
+                        { alpha:false }
+                    );
+                    ctx.drawImage(
+                        img,
+                        0,
+                        0,
+                        canvas.width,
+                        canvas.height
+                    );
+                    const data = canvas.toDataURL(
+                        'image/jpeg',
+                        0.82
+                    );
+                    const id = await db.photos.add({
+                        plantId,
+                        logId: null,
+                        data,
+                        createdAt: new Date().toISOString()
+                    });
+                    resolve(id);
+                } catch(err) {
+                    reject(err);
+                }
+            };
+            img.onerror = () => {
+                reject(new Error('Immagine non valida'));
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+async function getPlantPhotos(plantId, limit = 50) {
+    return await db.photos.where('plantId').equals(plantId).reverse().limit(limit).toArray();
+}
+
+async function deletePhoto(id) { await db.photos.delete(id); }
+
+async function exportAllData() {
+    const data = { version: 1, exportedAt: new Date().toISOString(), localStorage: {}, indexedDB: {} };
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); data.localStorage[k] = localStorage.getItem(k); }
+    data.indexedDB.plants = await db.plants.toArray();
+    data.indexedDB.logs = await db.logs.toArray();
+    data.indexedDB.photos = await db.photos.toArray();
+    data.indexedDB.reminders = await db.reminders.toArray();
+    data.indexedDB.settings = await db.settings.toArray();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `grow420-backup-${new Date().toISOString().slice(0,10)}.json`; a.click(); URL.revokeObjectURL(url);
+}
+
+async function exportCSV() {
+    const logs = await db.logs.toArray();
+    if (!logs.length) { alert('Nessun log da esportare'); return; }
+    const header = 'Data,PiantaID,Testo,Tag,pH,EC,Temp,Umidita,PesoFresco_g,PesoSecco_g,Resa_pct\n';
+    const rows = logs.map(l => {
+        const tags = (l.tags || []).join(';');
+        const m = l.metrics || {};
+        const fresh = m.fresh || '';
+        const dry = m.dry || '';
+        const yieldPct = (fresh && dry) ? ((dry/fresh)*100).toFixed(1) : '';
+        return `"${l.date}","${l.plantId || ''}","${(l.text || '').replace(/"/g,'""')}","${tags}","${m.ph || ''}","${m.ec || ''}","${m.temp || ''}","${m.humidity || ''}","${fresh}","${dry}","${yieldPct}"`;
+    }).join('\n');
+    const blob = new Blob([header + rows], {type: 'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `grow420-logs-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+}
+
+async function importData(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (!data.version) { alert('File non valido'); resolve(false); return; }
+                if (!confirm('Questo sovrascriverà tutti i dati esistenti. Continuare?')) { resolve(false); return; }
+                // Restore localStorage
+                if (data.localStorage) { Object.keys(data.localStorage).forEach(k => localStorage.setItem(k, data.localStorage[k])); }
+                // Restore IndexedDB
+                await db.transaction('rw', db.plants, db.logs, db.photos, db.reminders, db.settings, async () => {
+                    await db.plants.clear(); if (data.indexedDB.plants) await db.plants.bulkAdd(data.indexedDB.plants);
+                    await db.logs.clear(); if (data.indexedDB.logs) await db.logs.bulkAdd(data.indexedDB.logs);
+                    await db.photos.clear(); if (data.indexedDB.photos) await db.photos.bulkAdd(data.indexedDB.photos);
+                    await db.reminders.clear(); if (data.indexedDB.reminders) await db.reminders.bulkAdd(data.indexedDB.reminders);
+                    await db.settings.clear(); if (data.indexedDB.settings) await db.settings.bulkAdd(data.indexedDB.settings);
+                });
+                alert("Dati importati con successo! L'app verrà ricaricata.");
+                location.reload();
+                resolve(true);
+            } catch(err) { console.error(err); alert("Errore durante l'importazione: " + err.message); resolve(false); }
+        };
+        reader.readAsText(file);
+    });
+}
+
+async function addStructuredLog(plantId, text, metrics, photoFiles) {
+    const tags = [];
+    const tagMatches = text.match(/#(\\w+)/g);
+    if (tagMatches) tagMatches.forEach(t => tags.push(t.slice(1)));
+    const log = { plantId, date: new Date().toLocaleString('it-IT'), text, tags, metrics: metrics || {}, photos: [] };
+    const logId = await db.logs.add(log);
+    // Salva foto
+    if (photoFiles && photoFiles.length) {
+        for (const file of photoFiles) {
+            const photoId = await addPhoto(plantId, file);
+            await db.photos.update(photoId, { logId });
+            log.photos.push(photoId);
+        }
+        await db.logs.update(logId, { photos: log.photos });
+    }
+    // Mantieni compatibilità localStorage
+    const plants = lsGet('grow-plants', []);
+    const idx = plants.findIndex(p => p.id === plantId);
+    if (idx >= 0) {
+        if (!plants[idx].logs) plants[idx].logs = [];
+        plants[idx].logs.push({ date: log.date, text: log.text });
+        lsSet('grow-plants', plants);
+    }
+    return logId;
+}
+
+async function addReminder(title, datetime, repeat) {
+    if ('Notification' in window && Notification.permission !== 'granted') {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') { alert('Abilita le notifiche per ricevere i promemoria.'); return false; }
+    }
+    await db.reminders.add({ title, datetime, repeat: repeat || 'once', active: 1, createdAt: new Date().toISOString() });
+    return true;
+}
+
+async function deleteReminder(id) { await db.reminders.delete(id); }
+
+async function toggleReminder(id, active) { await db.reminders.update(id, { active: active ? 1 : 0 }); }
+
+async function checkReminders() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    const now = new Date();
+    const reminders = await db.reminders.where('active').equals(1).toArray();
+    reminders.forEach(async r => {
+        const dt = new Date(r.datetime);
+        if (dt <= now) {
+            try {
+                new Notification('GROW 420 — Promemoria', {
+                    body: r.title,
+                    tag: 'grow-reminder-' + r.id,
+                    requireInteraction: true
+                });
+            } catch(e) {
+                if (navigator.serviceWorker?.ready) {
+                    navigator.serviceWorker.ready.then(reg => {
+                        reg.showNotification('GROW 420 — Promemoria', { body: r.title, tag: 'grow-reminder-' + r.id });
+                    });
+                }
+            }
+            if (r.repeat && r.repeat !== 'once') {
+                const next = new Date(dt);
+                if (r.repeat === 'daily') next.setDate(next.getDate() + 1);
+                if (r.repeat === 'weekly') next.setDate(next.getDate() + 7);
+                await db.reminders.update(r.id, { datetime: next.toISOString() });
+            } else {
+                await db.reminders.update(r.id, { active: 0 });
+            }
+        }
+    });
+}
+
+function initReminders() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        // aspetta interazione utente
+    }
+    if (reminderInterval) clearInterval(reminderInterval);
+    reminderInterval = setInterval(checkReminders, 30000);
+    checkReminders();
+}
+
+function toggleMenu(){document.getElementById('menu').classList.toggle('open')}
+
+function toggleStonerMode(){            // ← FUORI, funzione globale
+    const body=document.body;
+    body.classList.toggle('stoner-mode');
+    const active=body.classList.contains('stoner-mode');
+    lsSet('stoner-mode',active);
+    const btn=document.getElementById('stonerBtn');
+    if(btn){btn.classList.toggle('stoner-btn-active',active);btn.textContent=active?'🔥':'🌈';}
+       renderPage();
+    initBuds();
+}
+
+function initBuds(){
+const container=document.getElementById('leaves');
+if(!container)return;
+container.innerHTML='';
+const buds=[
+"url('assets/bud-pixel-1.png')",
+"url('assets/bud-pixel-2.png')",
+"url('assets/bud-pixel-3.png')"];
+const isStoner=document.body.classList.contains('stoner-mode');
+const smallScreen=window.innerWidth<700;
+const count=smallScreen
+    ? (isStoner ? 18 : 8)
+    : (isStoner ? 32 : 12);
+const glowColors=[
+    'rgba(191,0,255,.75)',
+    'rgba(57,255,20,.65)',
+    'rgba(255,102,0,.65)'
+];
+for(let i=0;i<count;i++){
+const el=document.createElement('div');
+el.className='falling-bud';
+el.style.backgroundImage=buds[i%3];
+el.style.left=(Math.random()*100)+'%';
+el.style.animationDelay=(Math.random()*10)+'s';
+const size=isStoner?(Math.random()*32+44):(Math.random()*16+28);
+const duration=isStoner?(Math.random()*5+6):(Math.random()*12+18);
+const opacity=isStoner?(0.55+Math.random()*0.35):0.55;
+el.style.width=size+'px';
+el.style.height=size+'px';
+el.style.animationDuration=duration+'s';
+el.style.opacity=opacity;
+const glow=glowColors[i%3];
+if(!smallScreen){
+    el.style.filter=`drop-shadow(0 0 ${isStoner?12:8}px ${glow})`;
+}
+container.appendChild(el)
+}
+}
+
+function updateHeader(){
+const item=navItems.find(n=>n.id===currentPage);
+const title=document.getElementById('header-title');
+if(title&&item){title.style.color=item.color;title.style.textShadow='0 0 10px '+item.color}
+}
+
+function renderBottomNav(){
+const nav=document.getElementById('bottomNav');
+nav.innerHTML=navItems.map(item=>`<button class="nav-item ${item.id===currentPage?'active':''}" onclick="go('${item.id}')" style="color:${item.id===currentPage?item.color:'#666'}"><span style="font-size:20px">${item.icon}</span><span>${item.label}</span></button>`).join('')
+}
+
+const PAGE_ROUTES = {
+    diagnosis: 'diagnosi.html'
+};
+
+function go(page, params){
+    let url = PAGE_ROUTES[page] || (page + '.html');
+    if (params && typeof params === 'object') {
+        const q = new URLSearchParams(params).toString();
+        if (q) url += '?' + q;
+    }
+    window.location.href = url;
+}
+
+
+// Stub renderPage — ogni pagina definisce la propria
+let currentPage = 'home';
+function renderPage() {
+    // Dispatcher MPA — chiama la funzione di render specifica della pagina corrente
+    const _map = {
+        home:       'renderHome',
+        dashboard:  'renderDashboard',
+        guide:      'renderGuide',
+        journal:    'renderJournal',
+        diagnosis:  'renderDiagnosis',
+        tools:      'renderTools',
+        strains:    'renderStrains',
+        compare:    'renderCompare',
+        coa:        'renderCOA',
+        community:  'renderCommunity',
+        entities:   'renderEntities',
+        timer:      'renderTimer',
+        reminders:  'renderReminders',
+        iot:        'renderIoT',
+        shop:       'renderShop',
+        library:    'renderLibrary'
+    };
+    const fnName = _map[currentPage];
+    if (fnName && typeof window[fnName] === 'function') {
+        window[fnName]();
+    } else {
+        console.warn('[GROW420] renderPage: nessuna funzione per pagina:', currentPage);
+    }
+}
+
+// L'inizializzazione viene eseguita dalla pagina MPA dopo aver impostato currentPage.
+// Evita il primo render prematuro di 'home' prima che lo script della pagina sia caricato.
+
+(function(){
+const canvas=document.getElementById('smoke');
+if(!canvas)return;
+const ctx=canvas.getContext('2d');
+let w,h,particles=[];
+function resize(){w=canvas.width=window.innerWidth;h=canvas.height=window.innerHeight}
+resize();window.addEventListener('resize',resize);
+class Particle{
+constructor(){this.reset()}
+reset(){
+this.x=Math.random()*w;this.y=h+Math.random()*100;
+this.vx=(Math.random()-0.5)*0.5;this.vy=-Math.random()*1.5-0.5;
+this.size=Math.random()*80+40;this.alpha=0;this.life=0;this.maxLife=Math.random()*400+300
+}
+update(){
+this.x+=this.vx+Math.sin(this.life*0.01)*0.5;this.y+=this.vy;
+this.life++;this.size+=0.15;
+if(this.life<60)this.alpha=Math.min(this.alpha+0.003,0.08);
+else if(this.life>this.maxLife-100)this.alpha=Math.max(this.alpha-0.003,0);
+if(this.life>=this.maxLife)this.reset()
+}
+draw(){
+ctx.beginPath();
+const g=ctx.createRadialGradient(this.x,this.y,0,this.x,this.y,this.size);
+g.addColorStop(0,`rgba(150,150,150,${this.alpha})`);
+g.addColorStop(1,'rgba(150,150,150,0)');
+ctx.fillStyle=g;ctx.arc(this.x,this.y,this.size,0,Math.PI*2);ctx.fill()
+}
+}
+const PARTICLE_COUNT = window.innerWidth < 700 ? 12 : 18;
+let animationId = null;
+for(let i=0;i<PARTICLE_COUNT;i++)particles.push(new Particle());
+function loop(){
+    if(document.hidden){
+        animationId=null;
+        return;
+    }
+    ctx.clearRect(0,0,w,h);
+    particles.forEach(p=>{
+        p.update();
+        p.draw();
+    });
+    animationId=requestAnimationFrame(loop);
+}
+function startSmokeLoop(){
+    if(animationId===null){
+        animationId=requestAnimationFrame(loop);
+    }
+}
+document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){
+        if(animationId!==null){
+            cancelAnimationFrame(animationId);
+        }
+        animationId=null;
+    }else{
+        startSmokeLoop();
+    }
+});
+startSmokeLoop();
+})();
+
+
+// --- FASE 2: NAVIGAZIONE MPA UTILITY ---
+function goLibraryItem(id) {
+    window.location.href = 'library.html?item=' + id;
+}
+
+// --- FASE 2: MODERAZIONE COMMUNITY ---
+function checkContentModeration(text) {
+    if (!text) return {ok: true};
+    const capsRatio = (text.match(/[A-Z]/g) || []).length / text.length;
+    if (capsRatio > 0.7 && text.length > 10) return {ok: false, reason: 'Troppo MAIUSCOLO. Riscrivi normalmente.'};
+    if (/(.)(\1{6,})/.test(text)) return {ok: false, reason: 'Troppi caratteri ripetuti.'};
+    const badWords = ['merda','cazzo','fanculo','puttana','stronzo','bastardo','negro','ebreo','nazi','hitler'];
+    const lower = text.toLowerCase();
+    for (let w of badWords) { if (lower.includes(w)) return {ok: false, reason: 'Linguaggio non appropriato per la community.'}; }
+    return {ok: true};
+}
+function checkCommunityRateLimit() {
+    const key = 'grow-last-community-time';
+    const last = lsGet(key, 0);
+    const now = Date.now();
+    if (now - last < 30000) return false;
+    lsSet(key, now);
+    return true;
+}
+
+// --- FASE 2: WEBP COMPRESSION (override addPhoto) ---
+// La funzione addPhoto originale viene sovrascritta qui con supporto WebP
+if (typeof addPhoto === 'function') {
+    const _originalAddPhoto = addPhoto;
+    addPhoto = async function(plantId, file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(reader.error);
+            reader.onload = () => {
+                const img = new Image();
+                img.onload = async () => {
+                    try {
+                        const MAX_SIZE = 1600;
+                        const scale = Math.min(1, MAX_SIZE / Math.max(img.naturalWidth, img.naturalHeight));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+                        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+                        const ctx = canvas.getContext('2d', { alpha:false });
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        // FASE 2: prova WebP, fallback JPEG
+                        let data = canvas.toDataURL('image/webp', 0.8);
+                        if (!data.startsWith('data:image/webp')) {
+                            data = canvas.toDataURL('image/jpeg', 0.82);
+                        }
+                        const id = await db.photos.add({ plantId, logId: null, data, createdAt: new Date().toISOString() });
+                        resolve(id);
+                    } catch(err) { reject(err); }
+                };
+                img.onerror = () => reject(new Error('Immagine non valida'));
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+}
+

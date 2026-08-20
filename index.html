@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#050505">
+<meta name="description" content="Street Cult Grow Journal — Traccia la tua coltivazione da setup a curing.">
+<title>GROW 420 — Home</title>
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{--ng:#39ff14;--np:#bf00ff;--no:#ff6600;--nc:#00ffff;--nk:#ff1493;--ny:#f0e800;--dk:#0a0a0a;--d2:#050505;--cd:#111;--bd:#222}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100vh;background:var(--d2)}
+::-webkit-scrollbar-track{background:var(--d2)}
+::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
+::selection{background:var(--ng);color:#000}
+@keyframes lf{0%{transform:translateY(-10vh) rotate(0);opacity:0}10%{opacity:.6}90%{opacity:.6}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}
+@keyframes sl{0%{transform:translateY(-100%)}100%{transform:translateY(100vh)}}
+@keyframes growUp{from{transform:scale(0.3);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes pulseGlow{0%,100%{filter:drop-shadow(0 0 8px rgba(57,255,20,.6))}50%{filter:drop-shadow(0 0 20px rgba(57,255,20,.9))}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.grunge{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.04;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");background-size:200px}
+.scanline{position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden}
+.scanline::before{content:'';position:absolute;width:100%;height:2px;background:rgba(57,255,20,.08);animation:sl 6s linear infinite;box-shadow:0 0 10px rgba(57,255,20,.2)}
+#leaves{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+.falling-bud{position:fixed;pointer-events:none;z-index:1;width:36px;height:36px;background-size:contain;background-repeat:no-repeat;opacity:.55;animation:lf linear infinite;image-rendering:pixelated;filter:drop-shadow(0 0 10px rgba(191,0,255,.5))}
+.page{padding:20px;padding-bottom:120px;min-height:100vh;position:relative;z-index:2;animation:fadeIn .4s ease}
+.page-bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+.card{background:rgba(17,17,17,.55);border:1px solid rgba(34,34,34,.6);border-radius:16px;overflow:hidden;transition:transform .2s,border-color .2s}
+.card:active{transform:scale(.98)}
+.btn{padding:14px 28px;border-radius:12px;border:none;font-weight:800;font-size:14px;cursor:pointer;transition:all .2s;text-transform:uppercase;letter-spacing:1px;font-family:'Orbitron',sans-serif}
+.btn:active{transform:scale(.95)}
+.inp{background:rgba(10,10,10,.6);border:1px solid rgba(51,51,51,.7);border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;width:100%;outline:none;transition:border-color .2s;font-family:'Inter',sans-serif}
+.inp:focus{border-color:var(--ng)}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;font-family:'Orbitron',sans-serif;text-transform:uppercase;letter-spacing:1px}
+.prog{height:6px;background:#1a1a1a;border-radius:99px;overflow:hidden}
+.prog-f{height:100%;border-radius:99px;transition:width .5s ease}
+.nav-item{flex:0 0 auto;min-width:62px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 6px;cursor:pointer;transition:all .2s;border:none;background:transparent;font-family:'Inter',sans-serif;font-size:10px;color:#666;white-space:nowrap}
+.nav-item.active{font-weight:700}
+.t-graffiti{font-family:'Permanent Marker',cursive}
+.t-tech{font-family:'Orbitron',sans-serif}
+.gn{color:var(--ng);text-shadow:0 0 10px rgba(57,255,20,.5)}
+.gp{color:var(--np);text-shadow:0 0 10px rgba(191,0,255,.5)}
+.go{color:var(--no);text-shadow:0 0 10px rgba(255,102,0,.5)}
+.gc{color:var(--nc);text-shadow:0 0 10px rgba(0,255,255,.5)}
+.gk{color:var(--nk);text-shadow:0 0 10px rgba(255,20,147,.5)}
+.gy{color:var(--ny);text-shadow:0 0 10px rgba(240,232,0,.5)}
+.gl-g{box-shadow:0 0 15px rgba(57,255,20,.3),inset 0 0 15px rgba(57,255,20,.1)}
+.gl-p{box-shadow:0 0 15px rgba(191,0,255,.3),inset 0 0 15px rgba(191,0,255,.1)}
+.gl-o{box-shadow:0 0 15px rgba(255,102,0,.3),inset 0 0 15px rgba(255,102,0,.1)}
+.gl-c{box-shadow:0 0 15px rgba(0,255,255,.3),inset 0 0 15px rgba(0,255,255,.1)}
+.gl-k{box-shadow:0 0 15px rgba(255,20,147,.3),inset 0 0 15px rgba(255,20,147,.1)}
+.gl-y{box-shadow:0 0 15px rgba(240,232,0,.3),inset 0 0 15px rgba(240,232,0,.1)}
+.gl-lib{box-shadow:0 0 15px rgba(196,163,90,.3),inset 0 0 15px rgba(196,163,90,.1)}
+.glib{color:#c4a35a;text-shadow:0 0 10px rgba(196,163,90,.5)}
+.header{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(5,5,5,.75);backdrop-filter:blur(20px);border-bottom:1px solid rgba(34,34,34,.6);padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(5,5,5,.8);backdrop-filter:blur(20px);border-top:1px solid rgba(34,34,34,.6);display:flex;padding:6px 8px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--ng) rgba(255,255,255,.05)}
+.bottom-nav::-webkit-scrollbar{height:4px}
+.bottom-nav::-webkit-scrollbar-track{background:rgba(255,255,255,.05)}
+.bottom-nav::-webkit-scrollbar-thumb{background:var(--ng);border-radius:4px}
+.menu-overlay{position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.8);backdrop-filter:blur(10px);padding-top:80px;padding-bottom:120px;display:none;flex-direction:column;gap:4px;overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--ng) transparent}
+.menu-overlay.open{display:flex}
+.menu-overlay::-webkit-scrollbar{width:4px}
+.menu-overlay::-webkit-scrollbar-track{background:transparent}
+.menu-overlay::-webkit-scrollbar-thumb{background:var(--ng);border-radius:4px}
+.menu-btn{background:none;border:none;padding:16px 24px;color:#888;font-size:18px;font-family:'Orbitron';text-align:left;cursor:pointer;border-left:4px solid transparent;display:flex;align-items:center;gap:16px;transition:all .2s}
+.menu-btn:hover,.menu-btn.active{color:#fff;border-left-color:currentColor}
+.smoke-canvas{position:fixed;inset:0;pointer-events:none;z-index:0}
+.home-bg{position:fixed;inset:0;z-index:0;background:url('assets/bg-home.jpg') center/cover no-repeat;opacity:.6;pointer-events:none}
+.home-bg::after{content:'';position:fixed;inset:0;background:rgba(5,5,5,.2);pointer-events:none}
+.pixel-plant{width:160px;height:160px;object-fit:contain;image-rendering:pixelated;animation:growUp .8s ease,pulseGlow 3s ease infinite,float 4s ease infinite}
+.plant-stage{position:relative;width:220px;height:270px;margin:0 auto 28px}
+.plant-container{position:absolute;top:35px;left:50%;transform:translateX(-50%);width:160px;height:160px}
+.plant-img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;image-rendering:pixelated;opacity:0;transform:scale(0.85) translateY(12px);transition:all 1s cubic-bezier(0.22,1,0.36,1);filter:drop-shadow(0 8px 20px rgba(0,0,0,.6))}
+.plant-img.active{opacity:1;transform:scale(1) translateY(0)}
+.plant-img.was-active{opacity:0.12;transform:scale(0.92) translateY(6px);transition:all 1.2s ease}
+.plant-ring{position:absolute;top:15px;left:50%;transform:translateX(-50%);width:195px;height:195px;z-index:0;pointer-events:none}
+.plant-ring-bg{fill:none;stroke:#1a1a1a;stroke-width:3.5}
+.plant-ring-progress{fill:none;stroke-width:3.5;stroke-linecap:round;transition:stroke-dasharray 1s cubic-bezier(0.22,1,0.36,1),stroke .6s ease;transform:rotate(-90deg);transform-origin:center;filter:drop-shadow(0 0 8px currentColor)}
+.plant-glow{position:absolute;bottom:45px;left:50%;transform:translateX(-50%);width:130px;height:55px;border-radius:50%;filter:blur(28px);z-index:-1;transition:all .8s ease;animation:pulseGlow 4s ease-in-out infinite}
+.plant-particles{position:absolute;top:35px;left:50%;transform:translateX(-50%);width:160px;height:160px;pointer-events:none;z-index:2;overflow:visible}
+.particle{position:absolute;width:3px;height:3px;border-radius:50%;opacity:0;animation:particleFloat 2.5s ease-out infinite}
+@keyframes particleFloat{0%{transform:translateY(0) scale(1);opacity:.9}50%{opacity:.5}100%{transform:translateY(-55px) scale(0);opacity:0}}
+.plant-badge{position:absolute;bottom:0;left:50%;transform:translateX(-50%);font-family:'Orbitron',sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:2px;padding:5px 16px;border-radius:99px;background:rgba(0,0,0,.55);border:1px solid currentColor;white-space:nowrap;font-weight:700}
+.plant-shine{position:absolute;top:35px;left:50%;transform:translateX(-50%);width:160px;height:160px;pointer-events:none;z-index:3;overflow:hidden;border-radius:12px}
+.plant-shine::after{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);animation:shineSweep 5s ease-in-out infinite}
+@keyframes shineSweep{0%,100%{left:-100%}50%{left:200%}}
+.strain-card{padding:16px;background:rgba(17,17,17,.55);border:1px solid rgba(34,34,34,.6);border-radius:12px;transition:all .2s}
+.strain-card:hover{border-color:#333}
+.tool-card{padding:20px;background:rgba(17,17,17,.55);border:1px solid rgba(34,34,34,.6);border-radius:12px}
+body.stoner-mode .strain-card,body.stoner-mode .tool-card{background:rgba(10,10,10,.55)!important;border-color:rgba(57,255,20,.5)!important;animation:rainbowBorder 4s linear infinite!important}
+.timer-display{font-family:'Orbitron',sans-serif;font-size:48px;font-weight:900;text-align:center;letter-spacing:2px}
+.chrono-display{font-family:'Orbitron',sans-serif;font-size:36px;font-weight:900;text-align:center;letter-spacing:2px}
+@keyframes neonFlicker{0%,100%{opacity:1}50%{opacity:.95}}
+.hero-glow{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(57,255,20,.08) 0%,transparent 70%);pointer-events:none;z-index:0;animation:neonFlicker 4s ease-in-out infinite}
+@keyframes stonerBg{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes stonerPulse{0%,100%{filter:brightness(1) saturate(1)}50%{filter:brightness(1.4) saturate(1.6)}}
+@keyframes rainbowBorder{0%{border-color:#39ff14}25%{border-color:#bf00ff}50%{border-color:#ff6600}75%{border-color:#00ffff}100%{border-color:#ff1493}}
+@keyframes stonerGradientShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.stoner-gradient{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity 1s ease;background:linear-gradient(135deg,#bf00ff 0%,#39ff14 25%,#ff6600 50%,#00ffff 75%,#ff1493 100%);background-size:500% 500%;animation:stonerGradientShift 6s ease infinite;mix-blend-mode:hard-light}
+body.stoner-mode .stoner-gradient{opacity:.45}
+body.stoner-mode .page{animation:stonerPulse 3s ease-in-out infinite}
+body.stoner-mode .card{background:rgba(10,10,10,.55)!important;border-color:rgba(57,255,20,.5)!important;animation:rainbowBorder 4s linear infinite!important}
+body.stoner-mode .t-graffiti{text-shadow:0 0 15px currentColor,0 0 35px currentColor!important}
+body.stoner-mode .t-tech{letter-spacing:4px!important;text-shadow:0 0 10px rgba(255,255,255,.4)!important}
+body.stoner-mode .header{background:rgba(5,5,5,.65)!important;border-bottom-color:var(--ng)!important;box-shadow:0 0 25px rgba(57,255,20,.25)!important}
+body.stoner-mode .bottom-nav{background:rgba(5,5,5,.65)!important;border-top-color:var(--ng)!important;box-shadow:0 0 25px rgba(57,255,20,.25)!important}
+body.stoner-mode .nav-item.active{text-shadow:0 0 12px currentColor!important}
+body.stoner-mode .plant-glow{filter:blur(40px) brightness(1.8)!important}
+body.stoner-mode .plant-ring-progress{filter:drop-shadow(0 0 15px currentColor)!important}
+body.stoner-mode .btn{box-shadow:0 0 15px rgba(57,255,20,.35)!important}
+body.stoner-mode .inp:focus{border-color:var(--np)!important;box-shadow:0 0 15px rgba(191,0,255,.5)!important}
+body.stoner-mode .hero-glow{background:radial-gradient(circle,rgba(191,0,255,.18) 0%,transparent 70%)!important}
+body.stoner-mode .scanline::before{background:rgba(255,20,147,.12)!important;box-shadow:0 0 15px rgba(255,20,147,.3)!important}
+.stoner-btn-active{color:#ff1493 !important;text-shadow:0 0 15px #ff1493,0 0 35px #ff1493;animation:neonFlicker .4s ease-in-out infinite}
+.joint-wrap{position:relative;width:40px;height:180px;margin:0 auto;overflow:visible;transform:rotate(-90deg)}
+.joint-wrap .joint-img{width:100%;height:100%;object-fit:cover;object-position:bottom;display:block;transition:clip-path .8s cubic-bezier(0.22,1,0.36,1);filter:drop-shadow(0 4px 8px rgba(0,0,0,.6))}
+.joint-smoke{position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:20px;height:40px;pointer-events:none;z-index:3;overflow:visible}
+.smoke-particle{position:absolute;bottom:0;left:50%;width:8px;height:8px;background:rgba(180,180,180,0.5);border-radius:50%;filter:blur(3px);animation:smokeRise 1.2s ease-out infinite;opacity:0;transform:translateX(-50%)}
+@keyframes smokeRise{0%{transform:translate(-50%,0) scale(0.4);opacity:0.7}100%{transform:translate(-50%,-35px) scale(1.8);opacity:0}}
+body.stoner-mode .joint-wrap .joint-img{filter:drop-shadow(0 0 15px rgba(191,0,255,.6))}
+body.stoner-mode h1.t-graffiti, body.stoner-mode h2.t-graffiti, body.stoner-mode #header-title {text-shadow: 0 0 4px currentColor, 0 0 10px currentColor !important; opacity: 0.92;}
+body.stoner-mode .page .t-tech {letter-spacing: 2px !important; text-shadow: 0 0 3px rgba(255,255,255,.12) !important;}
+
+/* LAZY LOADING SHIMMER */
+.img-shimmer{background:linear-gradient(90deg,#111 25%,#1a1a1a 50%,#111 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* INSTALL BANNER PWA */
+.install-banner{position:fixed;bottom:70px;left:10px;right:10px;z-index:98;background:rgba(10,10,10,.95);border:1px solid var(--ng);border-radius:14px;padding:12px 16px;display:none;align-items:center;gap:12px;backdrop-filter:blur(12px);box-shadow:0 0 20px rgba(57,255,20,.2)}
+.install-banner.show{display:flex}
+.install-banner .close-btn{background:none;border:none;color:#888;font-size:18px;cursor:pointer;margin-left:auto}
+
+/* MODERAZIONE COMMUNITY */
+.mod-warning{background:rgba(255,102,0,.1);border:1px solid var(--no);color:var(--no);padding:10px 14px;border-radius:10px;font-size:12px;margin:8px 0;display:none}
+.mod-warning.show{display:block}
+.report-btn{background:none;border:none;color:#c44;font-size:12px;cursor:pointer;font-family:Orbitron}
+.mod-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;background:rgba(0,255,255,.1);color:var(--nc);font-size:9px;font-family:Orbitron;border:1px solid var(--nc)}
+.rules-card{padding:16px;background:rgba(17,17,17,.55);border:1px solid rgba(34,34,34,.6);border-radius:12px;margin-bottom:12px}
+.rules-toggle{background:none;border:none;color:var(--ng);font-family:Orbitron;font-size:11px;cursor:pointer;width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center}
+
+</style>
+</head>
+<body>
+<div class="grunge"></div>
+<div class="offline-badge" id="offlineBadge">🛜 Offline — dati salvati localmente</div>
+<div class="hero-glow"></div>
+<div class="scanline"></div>
+<canvas class="smoke-canvas" id="smoke"></canvas>
+<div id="leaves"></div>
+<div class="stoner-gradient"></div>
+
+<div class="header">
+  <div style="display:flex;align-items:center;gap:10px">
+    <img src="assets/logo.jpg" style="width:36px;height:36px;border-radius:8px;object-fit:cover;border:1px solid #333" alt="logo" loading="lazy" class="img-shimmer" onload="this.classList.remove('img-shimmer')">
+    <span id="header-title" class="t-graffiti" style="font-size:20px;letter-spacing:2px">GROW 420</span>
+  </div>
+  <button id="stonerBtn" onclick="toggleStonerMode()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:8px;transition:all .3s" title="Stoner Mode">🌈</button>
+  <button onclick="toggleMenu()" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer">☰</button>
+</div>
+
+<div class="menu-overlay" id="menu">
+  <button class="menu-btn" onclick="window.location.href='index.html'">🏠 Home</button>
+  <button class="menu-btn" onclick="window.location.href='dashboard.html'">📊 Dashboard</button>
+  <button class="menu-btn" onclick="window.location.href='guide.html'">📖 Guida</button>
+  <button class="menu-btn" onclick="window.location.href='journal.html'">📓 Journal</button>
+  <button class="menu-btn" onclick="window.location.href='diagnosi.html'">🔍 Diagnosi</button>
+  <button class="menu-btn" onclick="window.location.href='tools.html'">🧮 Tools</button>
+  <button class="menu-btn" onclick="window.location.href='strains.html'">🧬 Strains</button>
+  <button class="menu-btn" onclick="window.location.href='compare.html'">⚖️ Confronta</button>
+  <button class="menu-btn" onclick="window.location.href='coa.html'">📋 COA</button>
+  <button class="menu-btn" onclick="window.location.href='community.html'">💬 Community</button>
+  <button class="menu-btn" onclick="window.location.href='entities.html'">🏢 Entità</button>
+  <button class="menu-btn" onclick="window.location.href='timer.html'">⏱️ Timer</button>
+  <button class="menu-btn" onclick="window.location.href='reminders.html'">⏰ Promemoria</button>
+  <button class="menu-btn" onclick="window.location.href='iot.html'">📡 Sensori</button>
+  <button class="menu-btn" onclick="window.location.href='shop.html'">🛒 Attrezzatura</button>
+  <button class="menu-btn" onclick="window.location.href='library.html'">📚 Libreria</button>
+</div>
+
+<div id="app" style="padding-top:60px"></div>
+
+<!-- Install Banner PWA -->
+<div class="install-banner" id="installBanner">
+  <span style="font-size:24px">🌿</span>
+  <div style="flex:1">
+    <div style="font-family:Orbitron;font-size:12px;color:#fff">Installa GROW 420</div>
+    <div style="font-size:10px;color:#888">Aggiungi alla schermata home</div>
+  </div>
+  <button id="installBtn" class="btn" style="background:var(--ng);color:#000;font-size:11px;padding:8px 16px">Installa</button>
+  <button class="close-btn" onclick="dismissInstall()">✕</button>
+</div>
+
+<div class="bottom-nav" id="bottomNav"></div>
+
+<script src="common.js"></script>
+<script>
+function renderHome(){
+const progress=getActivePlantProgress();
+const plants=lsGet('grow-plants',[]);
+const totalSteps=phases.reduce((a,p)=>a+p.steps.length,0);
+const completed=Object.values(progress).filter(Boolean).length;
+const overall=Math.round((completed/totalSteps)*100)||0;
+const active=plants[getActivePlantIndex()];
+const stageIndex=Math.min(Math.floor(overall/17),5);
+currentStageIndex=stageIndex;
+const stageColors=['#8fb87a','#6db56d','#4ea86a','#b8a84a','#c47a3a','#7a4ea8'];
+const stageColor=stageColors[stageIndex]||'#39ff14';
+const stageNames=['Setup','Seedling','Vegetativa','Pre-fioritura','Fioritura','Harvest'];
+const phaseName=active?(phases[active.phase]?.name||stageNames[stageIndex]):stageNames[stageIndex];
+const ringDash=Math.round(overall*5.53);
+const stageImgs=[0,1,2,3,4,5].map(i=>{
+let cls='plant-img';
+if(i===stageIndex)cls+=' active';
+else if(i===lastStageIndex&&i!==stageIndex)cls+=' was-active';
+return`<img src="assets/stage${i}.png" class="${cls}" alt="stadio ${i}">`;
+}).join('');
+let html=`<div style="position:relative">
+<div style="text-align:center;margin-bottom:32px">
+<h1 class="t-graffiti gn" style="font-size:42px;margin-bottom:8px">GROW 420</h1>
+<p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Street Cult Grow Journal</p>
+</div>
+<div class="plant-stage">
+<div class="plant-glow" style="background:radial-gradient(circle,${stageColor}45 0%,transparent 70%)"></div>
+<svg class="plant-ring" viewBox="0 0 200 200">
+<circle class="plant-ring-bg" cx="100" cy="100" r="88"/>
+<circle class="plant-ring-progress" cx="100" cy="100" r="88" stroke-dasharray="${ringDash} 553" stroke="${stageColor}"/>
+</svg>
+<div class="plant-shine"></div>
+<div class="plant-container">${stageImgs}</div>
+<div class="plant-particles" id="plantParticles"></div>
+<div class="plant-badge" style="color:${stageColor}">${phaseName}</div>
+</div>
+<div class="card gl-g" style="padding:24px;margin-bottom:20px;text-align:center;background:rgba(17,17,17,.30);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(57,255,20,.25)">
+<div style="font-size:13px;color:#666;margin-bottom:8px;font-family:Orbitron;letter-spacing:2px;text-transform:uppercase">Progresso Totale</div>
+<div style="font-size:48px;font-weight:900;color:var(--ng);font-family:Orbitron;text-shadow:0 0 20px rgba(57,255,20,.4)">${overall}%</div>
+<div class="prog" style="margin-top:16px"><div class="prog-f" style="width:${overall}%;background:var(--ng);box-shadow:0 0 12px rgba(57,255,20,.5)"></div></div>
+<div style="font-size:12px;color:#555;margin-top:8px">${completed} / ${totalSteps} step completati</div>
+</div>`;
+if(active){
+html+=`<div class="card gl-p" style="padding:20px;margin-bottom:20px;background:rgba(17,17,17,.30);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(191,0,255,.25)">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+<span style="font-size:32px">🌿</span>
+<div style="flex:1">
+<div style="font-weight:700;font-size:16px">${esc(active.name)}</div>
+<div style="font-size:12px;color:#888">${esc(active.strain)} • Giorno ${calcPlantDay(active)}</div>
+</div>
+<span style="font-size:11px;color:var(--ng);font-family:Orbitron">⭐ ATTIVA</span>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<span class="badge" style="background:rgba(191,0,255,.15);color:var(--np);border:1px solid var(--np)">${phases[active.phase]?.name||'Setup'}</span>
+<span class="badge" style="background:rgba(57,255,20,.1);color:var(--ng)">${esc(active.type)}</span>
+</div>
+${plants.length>1?`<button onclick="showPlantSelector()" class="btn" style="width:100%;margin-top:12px;background:#111;color:#888;border:1px solid #333;font-size:11px;padding:8px">🌿 Cambia Pianta Attiva</button>`:''}
+</div>`;
+}
+const items=[
+{label:'Guida',icon:'📖',color:'var(--ng)',page:'guide',desc:'10 fasi'},
+{label:'Journal',icon:'📓',color:'var(--np)',page:'journal',desc:'Le tue piante'},
+{label:'Diagnosi',icon:'🔍',color:'var(--no)',page:'diagnosis',desc:'Problemi'},
+{label:'Tools',icon:'🧮',color:'var(--nc)',page:'tools',desc:'Calcolatori'},
+{label:'Strains',icon:'🧬',color:'var(--nk)',page:'strains',desc:'Varietà'},
+{label:'Timer',icon:'⏱️',color:'var(--ny)',page:'timer',desc:'Countdown'},
+{label:'Libreria',icon:'📚',color:'#c4a35a',page:'library',desc:'Knowledge'}
+];
+html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">`;
+items.forEach(item=>{
+html+=`<button class="card" onclick="go('${item.page}')" style="padding:20px;text-align:left;border:none;background:rgba(17,17,17,.30);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.06)">
+<span style="font-size:28px">${item.icon}</span>
+<span style="font-weight:700;font-size:14px;color:${item.color};font-family:Orbitron;letter-spacing:1px">${item.label}</span>
+<span style="font-size:11px;color:#666">${item.desc}</span>
+</button>`;
+});
+html+=`</div><div style="text-align:center;margin-top:16px">${renderCloudStatus()}</div></div>`;
+return html;
+}
+function initHome(){
+const container=document.getElementById('plantParticles');
+if(!container)return;
+container.innerHTML='';
+const count=[3,5,7,9,12,0][currentStageIndex]||0;
+const colors=['#8fb87a','#6db56d','#4ea86a','#b8a84a','#c47a3a','#7a4ea8'];
+const c=colors[currentStageIndex]||'#bf00ff';
+for(let i=0;i<count;i++){
+const p=document.createElement('div');
+p.className='particle';
+p.style.left=(25+Math.random()*50)+'%';
+p.style.top=(30+Math.random()*40)+'%';
+p.style.animationDelay=(Math.random()*3)+'s';
+p.style.animationDuration=(2+Math.random()*2)+'s';
+p.style.background=c;
+p.style.boxShadow=`0 0 4px ${c}`;
+container.appendChild(p)
+}
+lastStageIndex=currentStageIndex;
+}
+function getPageBg(){const url=pageBgs[currentPage];return url?`background:linear-gradient(rgba(5,5,5,.55),rgba(5,5,5,.70)),url('${url}') center/cover no-repeat;`:''}
+// FASE 2: Install Banner PWA
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const lastDismiss = lsGet('install-dismiss', 0);
+    if (Date.now() - lastDismiss > 14*24*60*60*1000) {
+        const banner = document.getElementById('installBanner');
+        if (banner) banner.classList.add('show');
+    }
+});
+document.getElementById('installBtn').addEventListener('click', () => {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+    } else {
+        // iOS fallback
+        alert('Tocca Condividi (↗️) in Safari, poi "Aggiungi a Home"');
+    }
+    document.getElementById('installBanner').classList.remove('show');
+});
+function dismissInstall() {
+    lsSet('install-dismiss', Date.now());
+    document.getElementById('installBanner').classList.remove('show');
+}
+// Nascondi se già in standalone
+if (window.matchMedia('(display-mode: standalone)').matches) {
+    document.getElementById('installBanner').style.display = 'none';
+}
+
+
+currentPage = 'home';
+
+updateHeader();
+renderBottomNav();
+renderPage();
+
+</script>
+</body>
+</html>
