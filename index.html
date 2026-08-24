@@ -252,6 +252,16 @@ body.stoner-mode .page .t-tech {
 </style>
 <base target="_self">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// PWA early capture (must be in <head> to catch beforeinstallprompt before it fires)
+var pwaDeferredPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  pwaDeferredPrompt = e;
+  var btn = document.getElementById('headerInstallBtn');
+  if(btn) btn.style.display = 'inline-block';
+});
+</script>
 </head>
 <body>
 <div class="grunge"></div>
@@ -5209,50 +5219,21 @@ window.onerror = function(msg, url, line) {
         app.innerHTML = '<div style="padding:40px;text-align:center;color:#ff4444;font-family:Inter"><h2>⚠️ Errore di avvio</h2><p style="color:#aaa">'+String(msg).replace(/</g,'&lt;')+'<br>Riga: '+line+'</p><p style="color:#666;margin-top:20px">Prova a ricaricare la pagina (Ctrl+F5)<br>Se persiste, controlla la console (F12)</p></div>';
     }
 };
-</script>
-
-<!-- ═══ PWA INSTALL BANNER ═══ -->
-
-
 <script>
 let pwaDeferredPrompt = null;
-
+let pwaInstallDismissed = false;
 function initPWAInstall(){
   const headerBtn = document.getElementById('headerInstallBtn');
   const modal = document.getElementById('pwaInstallModal');
-
   if(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true){
-    if(headerBtn) headerBtn.style.display = 'none';
-    if(modal) modal.style.display = 'none';
-    return;
+    if(headerBtn) headerBtn.style.display = 'none'; return;
   }
-
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-
+  if(localStorage.getItem('grow-pwa-install-dismissed') === 'true') pwaInstallDismissed = true;
   if(headerBtn) headerBtn.style.display = 'inline-block';
-
-  const dismissed = localStorage.getItem('grow-pwa-install-dismissed');
-  if(!dismissed){
-    setTimeout(() => { if(modal) modal.style.display = 'flex'; }, 2500);
+  if(!pwaInstallDismissed && modal){
+    setTimeout(() => { if(modal && modal.style.display !== 'flex') modal.style.display = 'flex'; }, 2500);
   }
-
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    pwaDeferredPrompt = e;
-    if(headerBtn) headerBtn.style.display = 'inline-block';
-    if(!localStorage.getItem('grow-pwa-install-dismissed')){
-      if(modal) modal.style.display = 'flex';
-    }
-  });
-
-  window.addEventListener('appinstalled', () => {
-    pwaDeferredPrompt = null;
-    if(headerBtn) headerBtn.style.display = 'none';
-    if(modal) modal.style.display = 'none';
-    localStorage.setItem('grow-pwa-install-dismissed', 'true');
-  });
 }
-
 function triggerInstallPWA(){
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   if(pwaDeferredPrompt){
@@ -5260,6 +5241,8 @@ function triggerInstallPWA(){
     pwaDeferredPrompt.userChoice.then((choiceResult) => {
       if(choiceResult.outcome === 'accepted'){
         localStorage.setItem('grow-pwa-install-dismissed', 'true');
+        const h=document.getElementById('headerInstallBtn'); const m=document.getElementById('pwaInstallModal');
+        if(h) h.style.display='none'; if(m) m.style.display='none';
       }
       pwaDeferredPrompt = null;
     });
@@ -5269,17 +5252,18 @@ function triggerInstallPWA(){
     alert('📲 Per installare:\n- Chrome/Edge: menu ⋮ → Installa GROW 420\n- Firefox: menu → Installa');
   }
 }
-
 function dismissPWAInstall(){
   const modal = document.getElementById('pwaInstallModal');
-  if(modal){
-    modal.style.opacity = '0';
-    setTimeout(() => { modal.style.display = 'none'; modal.style.opacity = '1'; }, 300);
-  }
-  localStorage.setItem('grow-pwa-install-dismissed', 'true');
+  if(modal){ modal.style.opacity='0'; setTimeout(()=>{modal.style.display='none';modal.style.opacity='1';},300); }
+  localStorage.setItem('grow-pwa-install-dismissed','true'); pwaInstallDismissed=true;
 }
-
-initPWAInstall();
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); pwaDeferredPrompt=e; const h=document.getElementById('headerInstallBtn'); if(h) h.style.display='inline-block'; });
+window.addEventListener('appinstalled', ()=>{ pwaDeferredPrompt=null; const h=document.getElementById('headerInstallBtn'); const m=document.getElementById('pwaInstallModal'); if(h) h.style.display='none'; if(m) m.style.display='none'; localStorage.setItem('grow-pwa-install-dismissed','true'); });
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initPWAInstall); else initPWAInstall();
 </script>
+</script>
+
+
+
 </body>
 </html>
