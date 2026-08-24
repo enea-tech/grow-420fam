@@ -11,9 +11,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" sizes="512x512" href="assets/icon-512.png">
-<meta name="msapplication-TileImage" content="assets/icon-512.png">
-<meta name="msapplication-TileColor" content="#050505">
 <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -260,23 +257,22 @@ body.stoner-mode .page .t-tech {
 <div class="grunge"></div>
 <div class="offline-badge" id="offlineBadge">🛜 Offline — dati salvati localmente</div>
 
+<div id="pwaInstallModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px;animation:fadeIn .3s ease">
+  <div style="background:rgba(17,17,17,.95);border:1px solid var(--ng);border-radius:20px;padding:28px;max-width:380px;width:100%;text-align:center;box-shadow:0 0 40px rgba(57,255,20,.15);position:relative">
+    <button onclick="dismissPWAInstall()" style="position:absolute;top:12px;right:16px;background:none;border:none;color:#888;font-size:24px;cursor:pointer">×</button>
+    <img src="assets/icon-192.png" style="width:72px;height:72px;border-radius:16px;border:1px solid #333;margin:0 auto 16px;display:block;object-fit:cover">
+    <div style="font-family:Orbitron;font-size:18px;color:#fff;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Installa GROW 420</div>
+    <div style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:20px">Aggiungi questa app alla schermata home per accesso istantaneo, notifiche offline e esperienza nativa.</div>
+    <div style="display:flex;gap:10px">
+      <button onclick="triggerInstallPWA()" class="btn" style="flex:1;background:var(--ng);color:#000;font-size:13px;padding:12px">📲 Installa</button>
+      <button onclick="dismissPWAInstall()" class="btn" style="flex:1;background:#222;color:#888;font-size:13px;padding:12px">Non ora</button>
+    </div>
+  </div>
+</div>
 <div class="hero-glow"></div>
 <div class="scanline"></div>
 <canvas class="smoke-canvas" id="smoke"></canvas>
 <div id="leaves"></div>
-
-<!-- BANNER INSTALLAZIONE PWA -->
-<div id="pwa-install-banner" style="display:none;position:fixed;bottom:90px;left:12px;right:12px;z-index:150;background:rgba(17,17,17,.95);border:1px solid var(--ng);border-radius:16px;padding:16px;backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.8);animation:fadeIn .4s ease">
-  <div style="display:flex;align-items:center;gap:14px">
-    <img src="assets/icon-512.png" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:1px solid #333;background:#000;flex-shrink:0" alt="GROW 420">
-    <div style="flex:1;min-width:0">
-      <div style="font-family:Orbitron;font-size:13px;color:#fff;font-weight:700;letter-spacing:.5px">GROW 420</div>
-      <div style="font-size:12px;color:#aaa;margin-top:3px;line-height:1.4">Installa l'app per accedere offline e ricevere promemoria push.</div>
-    </div>
-    <button onclick="installPWA()" class="btn" style="background:var(--ng);color:#000;font-size:11px;padding:10px 18px;flex-shrink:0;border-radius:10px">Installa</button>
-    <button onclick="dismissPWA()" style="background:none;border:none;color:#666;font-size:22px;cursor:pointer;padding:4px;line-height:1">×</button>
-  </div>
-</div>
 <div class="stoner-gradient"></div>
 
 <div class="header">
@@ -285,6 +281,7 @@ body.stoner-mode .page .t-tech {
     <span id="header-title" class="t-graffiti" style="font-size:20px;letter-spacing:2px">GROW 420</span>
   </div>
   <button id="stonerBtn" onclick="toggleStonerMode()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:8px;transition:all .3s" title="Stoner Mode">🌈</button>
+<button id="headerInstallBtn" onclick="triggerInstallPWA()" style="display:none;background:none;border:none;color:var(--ng);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:8px;transition:all .3s;animation:pulseGlow 2s infinite" title="Installa GROW 420">📲</button>
 <button onclick="toggleMenu()" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer">☰</button>
 </div>
 
@@ -313,31 +310,6 @@ body.stoner-mode .page .t-tech {
 <div class="bottom-nav" id="bottomNav"></div>
 
 <script>
-// ═══════════════════════════════════════════════════════════
-// PWA INSTALL BANNER — assets/icon-512.png
-// ═══════════════════════════════════════════════════════════
-let deferredPrompt = null;
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  const banner = document.getElementById('pwa-install-banner');
-  if (banner) banner.style.display = 'block';
-});
-
-function installPWA() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  deferredPrompt.userChoice.then(() => {
-    deferredPrompt = null;
-    dismissPWA();
-  });
-}
-
-function dismissPWA() {
-  const banner = document.getElementById('pwa-install-banner');
-  if (banner) banner.style.display = 'none';
-}
 
 // ═══════════════════════════════════════════════════════════
 // GROW 420 — FASE 1: IndexedDB + PWA + Supabase + Glossary
@@ -5240,430 +5212,74 @@ window.onerror = function(msg, url, line) {
 </script>
 
 <!-- ═══ PWA INSTALL BANNER ═══ -->
-<div id="pwaInstallBanner" style="display:none;position:fixed;bottom:70px;left:10px;right:10px;z-index:150;background:rgba(10,10,10,.95);border:1px solid var(--ng);border-radius:16px;padding:14px 18px;backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.6),0 0 20px rgba(57,255,20,.1);align-items:center;gap:14px;animation:fadeIn .4s ease">
-  <img src="assets/icon-72.png" style="width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid #333;flex-shrink:0">
-  <div style="flex:1;min-width:0">
-    <div style="font-family:Orbitron;font-size:13px;color:#fff;text-transform:uppercase;letter-spacing:1px">Installa GROW 420</div>
-    <div id="pwaInstallText" style="font-size:12px;color:#888;margin-top:2px;line-height:1.4">Aggiungi alla schermata per accesso istantaneo e notifiche offline.</div>
-  </div>
-  <button id="pwaInstallBtn" class="btn" style="background:var(--ng);color:#000;font-size:11px;padding:10px 16px;flex-shrink:0;border:none;border-radius:10px">Installa</button>
-  <button id="pwaInstallClose" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:4px;line-height:1;flex-shrink:0">×</button>
-</div>
+
 
 <script>
-(function(){
-  let deferredPrompt = null;
-  const banner = document.getElementById('pwaInstallBanner');
-  const btn = document.getElementById('pwaInstallBtn');
-  const close = document.getElementById('pwaInstallClose');
-  const txt = document.getElementById('pwaInstallText');
+let pwaDeferredPrompt = null;
 
-  // Non mostrare mai in standalone
-  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) {
+function initPWAInstall(){
+  const headerBtn = document.getElementById('headerInstallBtn');
+  const modal = document.getElementById('pwaInstallModal');
+
+  if(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true){
+    if(headerBtn) headerBtn.style.display = 'none';
+    if(modal) modal.style.display = 'none';
     return;
   }
 
-  // iOS detection
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-  if (isIOS) {
-    // Su iOS mostriamo istruzioni diverse
-    txt.innerHTML = 'Tocca <strong>Condividi → Aggiungi a Home</strong> per installare.';
-    btn.textContent = 'Come fare';
-    btn.onclick = function(){
-      alert('📱 Per installare su iOS:\n1. Tocca il pulsante Condividi (□↑) in Safari\n2. Scorri e seleziona \"Aggiungi a Home\"\n3. Conferma con \"Aggiungi\"');
-    };
-    // Mostra banner iOS solo se non già chiuso
-    const dismissed = localStorage.getItem('grow-pwa-dismissed');
-    if (!dismissed || (Date.now() - parseInt(dismissed)) > 14*24*60*60*1000) {
-      setTimeout(()=>{ if(banner) banner.style.display='flex'; }, 2000);
+  if(headerBtn) headerBtn.style.display = 'inline-block';
+
+  const dismissed = localStorage.getItem('grow-pwa-install-dismissed');
+  if(!dismissed){
+    setTimeout(() => { if(modal) modal.style.display = 'flex'; }, 2500);
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    pwaDeferredPrompt = e;
+    if(headerBtn) headerBtn.style.display = 'inline-block';
+    if(!localStorage.getItem('grow-pwa-install-dismissed')){
+      if(modal) modal.style.display = 'flex';
     }
+  });
+
+  window.addEventListener('appinstalled', () => {
+    pwaDeferredPrompt = null;
+    if(headerBtn) headerBtn.style.display = 'none';
+    if(modal) modal.style.display = 'none';
+    localStorage.setItem('grow-pwa-install-dismissed', 'true');
+  });
+}
+
+function triggerInstallPWA(){
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if(pwaDeferredPrompt){
+    pwaDeferredPrompt.prompt();
+    pwaDeferredPrompt.userChoice.then((choiceResult) => {
+      if(choiceResult.outcome === 'accepted'){
+        localStorage.setItem('grow-pwa-install-dismissed', 'true');
+      }
+      pwaDeferredPrompt = null;
+    });
+  } else if(isIOS){
+    alert('📱 Per installare su iOS:\n1. Tocca il pulsante Condividi (□↑) in Safari\n2. Seleziona "Aggiungi a Home"\n3. Conferma con "Aggiungi"');
   } else {
-    // Android/Desktop con beforeinstallprompt
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      const dismissed = localStorage.getItem('grow-pwa-dismissed');
-      if (!dismissed || (Date.now() - parseInt(dismissed)) > 14*24*60*60*1000) {
-        if(banner) banner.style.display='flex';
-      }
-    });
-
-    btn.onclick = async function(){
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        if(banner) banner.style.display='none';
-      }
-      deferredPrompt = null;
-    };
+    alert('📲 Per installare:\n- Chrome/Edge: menu ⋮ → Installa GROW 420\n- Firefox: menu → Installa');
   }
+}
 
-  if (close) {
-    close.onclick = function(){
-      if(banner) banner.style.display='none';
-      localStorage.setItem('grow-pwa-dismissed', Date.now().toString());
-    };
+function dismissPWAInstall(){
+  const modal = document.getElementById('pwaInstallModal');
+  if(modal){
+    modal.style.opacity = '0';
+    setTimeout(() => { modal.style.display = 'none'; modal.style.opacity = '1'; }, 300);
   }
-})();
-
-// ═══════════════════════════════════════════════════════════
-// FASE 2 — AUTHENTICATION, SYNC & BACKUP
-// ═══════════════════════════════════════════════════════════
-let currentUser = null;
-let authSession = null;
-
-async function initAuth(){
-    if(!supabaseClient) return;
-    // Recupera sessione esistente
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if(session){
-        authSession = session;
-        currentUser = session.user;
-        lsSet('grow-cloud-status','online');
-        // Se c'era un user_id anonimo, migra i dati
-        const oldId = lsGet('grow-user-id', null);
-        if(oldId && oldId.startsWith('anon_')){
-            // Non cancelliamo l'oldId, semplicemente iniziamo a usare quello reale
-            // Il prossimo sync sovrascriverà
-        }
-    }
-    // Ascolta cambi di stato
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-        if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
-            authSession = session;
-            currentUser = session?.user || null;
-            lsSet('grow-cloud-status','online');
-            Toast.show('🔐 Loggato come ' + (currentUser?.email || 'utente'), 'success');
-            renderPage();
-        } else if(event === 'SIGNED_OUT'){
-            authSession = null;
-            currentUser = null;
-            lsSet('grow-cloud-status','offline');
-            Toast.show('🔓 Disconnesso', 'info');
-            renderPage();
-        }
-    });
+  localStorage.setItem('grow-pwa-install-dismissed', 'true');
 }
 
-function getCurrentUser(){ return currentUser; }
-function isLoggedIn(){ return !!currentUser; }
-
-async function loginWithMagicLink(email){
-    if(!supabaseClient){ Toast.show('Supabase non configurato', 'error'); return false; }
-    const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-    if(error){ Toast.show('Errore: ' + error.message, 'error'); return false; }
-    Toast.show('📧 Link magico inviato a ' + email, 'success');
-    return true;
-}
-
-async function loginWithGoogle(){
-    if(!supabaseClient){ Toast.show('Supabase non configurato', 'error'); return false; }
-    const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
-    if(error){ Toast.show('Errore: ' + error.message, 'error'); return false; }
-    return true;
-}
-
-async function logout(){
-    if(!supabaseClient) return;
-    await supabaseClient.auth.signOut();
-    currentUser = null;
-    authSession = null;
-    renderPage();
-}
-
-// ═══ SYNC AGGIORNATO CON AUTH REALE ═══
-async function syncToCloud(){
-    if(!supabaseClient){ Toast.show('Supabase non disponibile', 'error'); return; }
-    const user = getCurrentUser();
-    if(!user){ Toast.show('Devi fare login per sincronizzare', 'warn'); showAuthModal(); return; }
-    try{
-        const payload = {
-            user_id: user.id,
-            plants: lsGet('grow-plants',[]),
-            coa: lsGet('grow-coa',[]),
-            community: lsGet('grow-community',[]),
-            settings: {stoner: lsGet('stoner-mode',false), activePlant: getActivePlantIndex(), tier: lsGet('grow-tier','free')},
-            updated_at: new Date().toISOString()
-        };
-        const {error} = await supabaseClient.from('grow_sync').upsert(payload, {onConflict: 'user_id'});
-        if(error){ console.error(error); Toast.show('Errore sync: '+error.message, 'error'); }
-        else { lsSet('grow-cloud-status','synced'); lsSet('grow-last-sync', Date.now()); Toast.show('☁️ Dati sincronizzati!', 'success'); renderPage(); }
-    }catch(e){ Toast.show('Errore: '+e.message, 'error'); }
-}
-
-async function syncFromCloud(){
-    if(!supabaseClient){ Toast.show('Supabase non disponibile', 'error'); return; }
-    const user = getCurrentUser();
-    if(!user){ Toast.show('Devi fare login per scaricare', 'warn'); showAuthModal(); return; }
-    try{
-        const {data,error} = await supabaseClient.from('grow_sync').select('*').eq('user_id',user.id).single();
-        if(error||!data){ Toast.show('Nessun dato remoto trovato', 'warn'); return; }
-        const ok = await showModal({title:'Sovrascrivi dati locali?', body:'I dati sul cloud sovrascriveranno quelli locali. Continuare?', okText:'Scarica', danger:true});
-        if(!ok) return;
-        lsSet('grow-plants',data.plants||[]);
-        lsSet('grow-coa',data.coa||[]);
-        lsSet('grow-community',data.community||[]);
-        if(data.settings){
-            lsSet('stoner-mode',data.settings.stoner||false);
-            lsSet('grow-active-plant',data.settings.activePlant||0);
-            if(data.settings.tier) lsSet('grow-tier', data.settings.tier);
-        }
-        Toast.show('☁️ Dati scaricati! Ricarico...', 'success');
-        setTimeout(()=>location.reload(), 1200);
-    }catch(e){ Toast.show('Errore: '+e.message, 'error'); }
-}
-
-// ═══ AUTO BACKUP ═══
-function autoBackup(){
-    const last = parseInt(lsGet('grow-last-backup','0'));
-    const now = Date.now();
-    if(now - last > 86400000){ // 24h
-        lsSet('grow-last-backup', now.toString());
-        // Se loggato e Pro, sync automatico
-        if(isLoggedIn() && getTier() === 'pro'){
-            syncToCloud();
-        }
-    }
-}
-
-// ═══════════════════════════════════════════════════════════
-// FASE 3 — TIER SYSTEM & MONETIZZAZIONE
-// ═══════════════════════════════════════════════════════════
-const TIER_CONFIG = {
-    free: { label: 'Free', maxPlants: 3, pdf: false, autoSync: false, coaLimit: 2, price: '0€', color: '#888' },
-    basic: { label: 'Basic', maxPlants: 10, pdf: true, autoSync: false, coaLimit: 10, price: '4.99€/mese', color: '#00ffff' },
-    pro: { label: 'Pro', maxPlants: 999, pdf: true, autoSync: true, coaLimit: 999, price: '9.99€/mese', color: '#39ff14' }
-};
-
-function getTier(){ return lsGet('grow-tier','free'); }
-function setTier(tier){ lsSet('grow-tier', tier); Toast.show('Passato a piano ' + TIER_CONFIG[tier].label, 'success'); renderPage(); }
-
-function checkTierLimit(feature){
-    const tier = getTier();
-    const cfg = TIER_CONFIG[tier];
-    if(feature === 'plants'){
-        const plants = lsGet('grow-plants',[]);
-        if(plants.length >= cfg.maxPlants){
-            Toast.show('Limite ' + cfg.maxPlants + ' piante raggiunto. Passa a ' + (tier==='free'?'Basic':'Pro') + ' per aggiungerne altre.', 'warn');
-            return false;
-        }
-        return true;
-    }
-    if(feature === 'pdf'){
-        if(!cfg.pdf){ Toast.show('Export PDF riservato ai piani Basic e Pro', 'warn'); go('pricing'); return false; }
-        return true;
-    }
-    if(feature === 'coa'){
-        const coas = lsGet('grow-coa',[]);
-        if(coas.length >= cfg.coaLimit){ Toast.show('Limite COA raggiunto per piano ' + cfg.label, 'warn'); return false; }
-        return true;
-    }
-    return true;
-}
-
-// Override savePlant per enforcement tier
-const _origSavePlant = window.savePlant;
-window.savePlant = function(){
-    const plants = lsGet('grow-plants',[]);
-    const isNew = journalEditId === null;
-    if(isNew && !checkTierLimit('plants')) return;
-    // Se era già in modifica, permetti sempre
-    _origSavePlant();
-};
-
-// Override saveCOA per enforcement tier
-const _origSaveCOA = window.saveCOA;
-window.saveCOA = function(){
-    if(!checkTierLimit('coa')) return;
-    _origSaveCOA();
-};
-
-// ═══ AUTH MODAL ═══
-function showAuthModal(){
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease';
-    overlay.innerHTML = `<div style="background:rgba(17,17,17,.95);border:1px solid #333;border-radius:20px;padding:28px;max-width:400px;width:100%;text-align:center;box-shadow:0 0 40px rgba(0,0,0,.5)">
-        <div style="font-family:Orbitron;font-size:20px;color:var(--ng);margin-bottom:8px">🔐 Accedi</div>
-        <div style="font-size:13px;color:#888;margin-bottom:20px">Sincronizza i tuoi dati su tutti i dispositivi</div>
-        <input type="email" id="authEmail" class="inp" placeholder="La tua email" style="margin-bottom:10px">
-        <button onclick="doMagicLink()" class="btn" style="width:100%;background:var(--np);color:#fff;margin-bottom:10px">📧 Invia Link Magico</button>
-        <button onclick="doGoogleLogin()" class="btn" style="width:100%;background:#222;color:#fff;border:1px solid #333;margin-bottom:10px">🔵 Accedi con Google</button>
-        <button onclick="closeAuthModal()" class="btn" style="width:100%;background:#111;color:#888;border:1px solid #222">Annulla</button>
-    </div>`;
-    document.body.appendChild(overlay);
-    window._authOverlay = overlay;
-}
-function closeAuthModal(){ if(window._authOverlay){ window._authOverlay.remove(); window._authOverlay=null; } }
-async function doMagicLink(){ const e=document.getElementById('authEmail').value.trim(); if(!e){Toast.show('Inserisci email','warn');return;} await loginWithMagicLink(e); closeAuthModal(); }
-async function doGoogleLogin(){ await loginWithGoogle(); }
-
-// ═══ PRICING PAGE ═══
-function renderPricing(){
-    const current = getTier();
-    const tiers = ['free','basic','pro'];
-    let html = `<div>
-    <div style="margin-bottom:20px">
-        <h1 class="t-graffiti gn" style="font-size:32px;margin-bottom:4px">Upgrade</h1>
-        <p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Scegli il piano che fa per te</p>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:16px">`;
-    tiers.forEach(t => {
-        const cfg = TIER_CONFIG[t];
-        const isCurrent = current === t;
-        html += `<div class="card" style="padding:24px;border:2px solid ${isCurrent?cfg.color:'#222'};background:${isCurrent?cfg.color+'10':'rgba(17,17,17,.55)'}">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-                <div style="font-family:Orbitron;font-size:22px;color:${cfg.color};font-weight:900">${cfg.label}</div>
-                <div style="font-family:Orbitron;font-size:14px;color:#fff">${cfg.price}</div>
-            </div>
-            <div style="font-size:12px;color:#aaa;line-height:1.8;margin-bottom:16px">
-                <div>🌿 Piante: ${cfg.maxPlants === 999 ? 'Illimitate' : cfg.maxPlants}</div>
-                <div>📄 Export PDF: ${cfg.pdf ? '✅' : '❌'}</div>
-                <div>☁️ Sync: ${cfg.autoSync ? 'Automatico' : 'Manuale'}</div>
-                <div>📋 COA: ${cfg.coaLimit === 999 ? 'Illimitati' : cfg.coaLimit}</div>
-            </div>
-            ${isCurrent ? `<span class="badge" style="background:${cfg.color}30;color:${cfg.color};border:1px solid ${cfg.color}">⭐ Piano Attivo</span>` : `<button onclick="activateTier('${t}')" class="btn" style="width:100%;background:${cfg.color}22;color:${cfg.color};border:1px solid ${cfg.color}55">Seleziona ${cfg.label}</button>`}
-        </div>`;
-    });
-    html += `</div>
-    <div style="margin-top:20px;padding:16px;background:rgba(255,102,0,.08);border:1px solid rgba(255,102,0,.25);border-radius:12px">
-        <div style="font-size:12px;color:#aaa;line-height:1.6">
-            <strong style="color:var(--no)">Nota:</strong> I pagamenti verranno gestiti tramite Stripe/PayPal in una fase futura. Per ora la selezione del piano è un mock per testare i limiti dell'app.
-        </div>
-    </div>
-    <div style="margin-top:16px;text-align:center">
-        ${isLoggedIn() ? `<button onclick="logout()" class="btn" style="background:#1a0505;color:#c44;border:1px solid #331111">🔓 Logout</button>` : `<button onclick="showAuthModal()" class="btn" style="background:var(--np);color:#fff">🔐 Login / Registrati</button>`}
-    </div>
-    </div>`;
-    return html;
-}
-function initPricing(){}
-function activateTier(tier){ setTier(tier); }
-
-// ═══ CART PAGE (mock per futuro marketplace) ═══
-function renderCart(){
-    const cart = lsGet('grow-shop-cart', []);
-    let html = `<div>
-    <div style="margin-bottom:20px">
-        <h1 class="t-graffiti gn" style="font-size:32px;margin-bottom:4px">Carrello</h1>
-        <p class="t-tech" style="font-size:11px;text-transform:uppercase;letter-spacing:3px;opacity:.6">Attrezzatura selezionata</p>
-    </div>`;
-    if(!cart.length){
-        html += `<div style="text-align:center;padding:40px;color:#555"><div style="font-size:48px;margin-bottom:12px">🛒</div><div style="font-family:Orbitron;font-size:14px">Carrello vuoto</div></div>`;
-    } else {
-        html += `<div style="display:flex;flex-direction:column;gap:12px">`;
-        let total = 0;
-        cart.forEach((item, i) => {
-            total += item.price;
-            html += `<div class="card" style="padding:16px;display:flex;justify-content:space-between;align-items:center">
-                <div>
-                    <div style="font-weight:700;font-size:14px">${esc(item.name)}</div>
-                    <div style="font-size:12px;color:#888">${esc(item.category)}</div>
-                </div>
-                <div style="display:flex;align-items:center;gap:12px">
-                    <div style="font-family:Orbitron;font-size:14px;color:var(--ng)">€${item.price.toFixed(2)}</div>
-                    <button onclick="removeFromCart(${i})" style="background:none;border:none;color:#c44;font-size:18px;cursor:pointer">🗑</button>
-                </div>
-            </div>`;
-        });
-        html += `</div>
-        <div class="card" style="padding:20px;margin-top:16px">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-                <div style="font-family:Orbitron;font-size:14px;color:#888">TOTALE</div>
-                <div style="font-family:Orbitron;font-size:24px;color:var(--ng);font-weight:900">€${total.toFixed(2)}</div>
-            </div>
-            <button onclick="checkoutCart()" class="btn" style="width:100%;margin-top:16px;background:var(--ng);color:#000">💳 Checkout (Mock)</button>
-        </div>`;
-    }
-    html += `</div>`;
-    return html;
-}
-function initCart(){}
-function removeFromCart(idx){
-    const cart = lsGet('grow-shop-cart', []);
-    cart.splice(idx, 1);
-    lsSet('grow-shop-cart', cart);
-    renderPage();
-}
-function checkoutCart(){ Toast.show('Checkout simulato — integrazione Stripe in arrivo!', 'success'); }
-
-// ═══ EXPORT PDF (jsPDF) ═══
-function exportJournalPDF(){
-    if(!checkTierLimit('pdf')) return;
-    if(typeof jspdf === 'undefined'){ Toast.show('jsPDF non caricato. Connettiti a internet.', 'error'); return; }
-    const { jsPDF } = jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    const plants = lsGet('grow-plants', []);
-    const activeIdx = getActivePlantIndex();
-    const active = plants[activeIdx];
-
-    // Header
-    doc.setFillColor(5,5,5);
-    doc.rect(0,0,210,297,'F');
-    doc.setTextColor(57,255,20);
-    doc.setFontSize(22);
-    doc.text('GROW 420 — Grow Journal', 105, 20, { align: 'center' });
-    doc.setTextColor(200,200,200);
-    doc.setFontSize(10);
-    doc.text('Esportato: ' + new Date().toLocaleDateString('it-IT'), 105, 28, { align: 'center' });
-
-    let y = 40;
-    plants.forEach((pl, idx) => {
-        if(y > 250){ doc.addPage(); y = 20; doc.setFillColor(5,5,5); doc.rect(0,0,210,297,'F'); }
-        doc.setTextColor(57,255,20);
-        doc.setFontSize(14);
-        doc.text((idx+1) + '. ' + pl.name + ' (' + pl.strain + ')', 15, y);
-        y += 6;
-        doc.setTextColor(180,180,180);
-        doc.setFontSize(10);
-        doc.text('Fase: ' + (phases[pl.phase]?.name || 'Setup') + ' | Giorno: ' + calcPlantDay(pl) + ' | Tipo: ' + pl.type, 15, y);
-        y += 8;
-        if(pl.logs && pl.logs.length){
-            const headers = [['Data', 'Testo', 'pH', 'EC', 'Temp', 'Umid']];
-            const body = pl.logs.slice(-20).map(l => {
-                const m = l.metrics || {};
-                return [l.date.split(',')[0], l.text.substring(0,40), m.ph||'-', m.ec||'-', m.temp||'-', m.humidity||'-'];
-            });
-            doc.autoTable({ head: headers, body: body, startY: y, theme: 'grid',
-                styles: { textColor: 200, fillColor: 17, fontSize: 8, cellPadding: 2 },
-                headStyles: { fillColor: 34, textColor: 57 },
-                alternateRowStyles: { fillColor: 10 }
-            });
-            y = doc.lastAutoTable.finalY + 10;
-        } else {
-            doc.setTextColor(100,100,100);
-            doc.text('Nessun log', 15, y);
-            y += 10;
-        }
-    });
-
-    doc.save('grow420-journal-' + new Date().toISOString().slice(0,10) + '.pdf');
-    Toast.show('📄 PDF esportato!', 'success');
-}
-
-// ═══ AGGIORNA HEADER CON INFO UTENTE ═══
-const _origUpdateHeader = window.updateHeader;
-window.updateHeader = function(){
-    _origUpdateHeader();
-    const title = document.getElementById('header-title');
-    if(title && currentUser){
-        const tier = getTier();
-        const tierLabel = TIER_CONFIG[tier].label;
-        const tierColor = TIER_CONFIG[tier].color;
-        title.innerHTML = `GROW 420 <span style="font-size:10px;color:${tierColor};font-family:Orbitron;vertical-align:middle;margin-left:6px;border:1px solid ${tierColor}55;padding:2px 8px;border-radius:99px">${tierLabel}</span>`;
-    }
-};
-
-// ═══════════════════════════════════════════════════════════
-// FINE FASI 2 & 3
-// ═══════════════════════════════════════════════════════════
-
-// Inizializzazione auth e backup (qui le funzioni sono già definite)
-initAuth();
-autoBackup();
-
+initPWAInstall();
 </script>
-
 </body>
 </html>
